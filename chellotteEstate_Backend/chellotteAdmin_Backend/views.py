@@ -1,0 +1,1494 @@
+from django.shortcuts import render
+from django.db import models
+from chellotteAdmin_Backend.models import*
+import environ
+# from sqlalchemy import case
+# from django.utils.html import strip_tags
+from django.db.models import Sum, Avg
+from sqlalchemy import text  
+# from rest_framework import status
+# from sqlalchemy import func, extract
+# import calendar
+# import mimetypes  # Add this at the top of your file
+from PIL import Image
+from datetime import datetime, timedelta
+from sqlalchemy.orm import aliased
+# from rest_framework.parsers import MultiPartParser, FormParser
+# from django.core.files.uploadedfile import UploadedFile
+# from django.core.files.storage import default_storage
+# from django.core.files.base import ContentFile
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated,AllowAny
+from django.contrib.auth.hashers import make_password, check_password
+from rest_framework.decorators import api_view, permission_classes, renderer_classes,authentication_classes
+import json,jwt
+from sqlalchemy.exc import SQLAlchemyError
+from rest_framework.response import Response
+from chellotteEstate_Backend import dbsession
+from django.http import HttpResponse
+import traceback
+from sqlalchemy import create_engine, MetaData, Table, DDL
+from sqlalchemy.orm import sessionmaker
+from os.path import basename
+from datetime import datetime
+from chellotteEstate_Backend.adminrestframeworkTokenAuthenticaion import TokenAuthentication
+from django.contrib.auth import authenticate
+#from CeeKeDayon_Backend.JSONDateSerializer import JSONDateEncoder
+import math
+import random
+from datetime import timedelta,date
+import datetime
+from django.utils import timezone
+from django.template.loader import get_template
+from sqlalchemy.orm.exc import NoResultFound
+import os
+from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+import secrets
+import re 
+import time
+from sqlalchemy import Time as SQLAlchemyTime
+from sqlalchemy.orm import joinedload
+import inflect
+from django.conf import settings  
+from jwt.exceptions import ExpiredSignatureError, DecodeError 
+import string
+from django.core.files.storage import FileSystemStorage
+from sqlalchemy import func
+import traceback
+from asgiref.sync import async_to_sync
+import pandas as pd 
+import numpy as np
+from io import BytesIO 
+from openpyxl import load_workbook 
+# from channels.layers import get_channel_layer
+from collections import defaultdict
+from sqlalchemy.types import Float  
+from sqlalchemy import func, and_
+from django.core.management import call_command
+from django.http import HttpResponseNotFound
+from rest_framework import status
+from django.http import StreamingHttpResponse
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+#from .models import Country
+#from .database import async_sessionmaker
+from sqlalchemy.future import select
+import asyncio
+# from sqlalchemy import or_, and_ 
+import calendar
+from django.utils.translation import gettext as _
+# from django.db import connection, DatabaseError
+# from sqlalchemy import create_engine, inspect, text
+# from sqlalchemy import text
+# from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+# from django.utils.timezone import make_aware
+# from num2words import num2words
+# from babel.numbers import format_decimal
+import sys
+from io import BytesIO
+from babel.dates import format_datetime
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from PIL import Image
+
+env = environ.Env()
+environ.Env.read_env()
+
+categoryFolder='media/'
+bannerFolder='media/'
+
+
+def get_current_date():
+    return datetime.datetime.now().strftime('%d-%m-%Y')
+    current_date = get_current_date()
+
+def generateOtp():
+    digits = "0123456789"
+    OTP = ""
+    for i in range(4):
+        OTP += digits[math.floor(random.random() * 10)]
+    return OTP
+
+def senduserOTP(params):
+    try:
+        ctx = {'OTP': params['otp_val']}
+
+        plaintext = get_template('email/email.txt')
+        htmly = get_template('email/email.html')
+        subject = 'Welcome to MANKIND TALKS'
+        from_email = 'anupamaminnu2002@gmail.com'
+        to = params['emailId']
+
+        text_content = plaintext.render(ctx)
+        html_content = htmly.render(ctx)
+
+        msg = EmailMultiAlternatives(subject, text_content, from_email, [to])
+        msg.attach_alternative(html_content, "text/html")
+
+        try:
+            msg.send()
+            return True
+        except Exception as email_error:
+            print("Email sending error:", email_error)
+            return False
+
+    except Exception as e:
+        print("General error in senduserOTP:", e)
+        return False
+
+def generate_key():
+    random_key = secrets.token_hex(4) 
+    return random_key
+# ---Login ----
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def SuperAdminAuthentication(request):
+    session = dbsession.Session()
+    try:
+        username = request.data['username']
+        password = request.data['password']
+
+        user = session.query(SuperAdminDtl).filter(SuperAdminDtl.username == username).one_or_none()
+        current_date = datetime.datetime.now().replace(microsecond=0)
+
+        if user and user.check_password(password):
+            if user.status == "Active":
+                try:
+                    expiry_time = datetime.datetime.now() + timedelta(minutes=600)
+                    payload = {
+                        'loginId': user.loginId,
+                        'expiry': expiry_time.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+
+                    token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+                    session.query(SuperAdminDtl).filter(SuperAdminDtl.loginId == user.loginId).update({'lastlogined': current_date})
+                    #session.query(AuthToken).filter_by(loginId=user.loginId).delete()
+
+                    auth_token = AuthToken()
+                    auth_token.key = token
+                    auth_token.created = current_date
+                    auth_token.loginId = user.loginId
+                    session.add(auth_token)
+                    session.commit()
+                    # fcm_token = request.data['fcm_token']
+                    # session.query(AuthToken).filter(AuthToken.loginId == user.loginId).update({'fcm_token': fcm_token})
+                    # session.commit()
+                    history = SuperAdminLoginHistoryDtl(
+                        loginId=user.loginId,
+                        logineddate=current_date.date(),
+                        loginedtime=current_date.time(),
+                        createddate=current_date,
+                        # loginbrowser=request.data['loginbrowser']
+                    )
+                    session.add(history)
+                    session.commit()
+
+                    admin_details = {
+                        'token': token,
+                        'username': user.username,
+                        'EmailId': user.emailId,
+                        'loginId': user.loginId,
+                        'type': 'SuperAdmin',
+                        'status': 'Active',
+                        'token_expiry': expiry_time.strftime("%Y-%m-%d %H:%M:%S"),
+                        'expiry_time': expiry_time,
+                        # 'loginbrowser': history.loginbrowser
+                    }
+                    if all(admin_details.values()):
+                        return Response({'response': 'Success', 'logindetails': admin_details})
+                    else:
+                        return Response({'response': 'Error', 'message': 'Invalid admin details found.'})
+                    
+                except Exception as e:
+                    session.rollback()
+                    return Response({'response': 'Error', 'message': 'Cannot login now. Please try again later...!', 'Error': str(e)})
+            else:
+                return Response({'status': 'Error', 'message': 'Your account is inactive. Please contact the admin.'})
+        else:
+            return Response({'status': 'Error', 'message': 'Please check your credentials'})
+    except SQLAlchemyError as e:
+        traceback.print_exc()
+        session.rollback()
+        return Response({'response': 'Error', 'message': 'Something went wrong please try again after sometime', 'Error': str(e)})
+    except Exception as e:
+        traceback.print_exc()
+        session.rollback()
+        return Response({'response': 'Error', 'message': 'Something went wrong please try again after sometime', 'Error': str(e)})
+    finally:
+        session.close()
+        
+ 
+#------------ Forgot Password -------
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+def AdminforgotPassword(request):
+    session = dbsession.Session()
+    
+    try:
+        emailId = request.data.get('emailId')
+        if not emailId:
+            return Response({'response': 'Error', 'message': 'Email ID is required'}, status=400)
+
+        try:
+            admin = session.query(SuperAdminDtl).filter(SuperAdminDtl.emailId == emailId).one()
+        except NoResultFound:
+            admin = None
+
+        if not admin:
+            return Response({'response': 'Error', 'message': 'An account with this email does not exist'}, status=200)
+
+        Otp = generateOtp()
+        key = generate_key()
+        otp_cre_time = datetime.datetime.now().replace(microsecond=0)
+        otp_expire_time = otp_cre_time + timedelta(minutes=5)
+
+        otpParams = {
+            "otp_val": Otp,
+            "otp_cre_time": otp_cre_time,
+            "otp_expire_time": otp_expire_time,
+            "emailId": emailId
+        }
+
+        if Otp:
+            result = senduserOTP(otpParams)
+
+            if result is True:
+                otpObj = OTP()
+                otpObj.emailId = emailId
+                otpObj.otp = Otp
+                otpObj.key = key
+                otpObj.createddate = datetime.datetime.now()
+                otpObj.date_time = datetime.datetime.now()
+                otpObj.status = 'Active'
+
+                session.add(otpObj)
+                session.commit()
+
+                return Response({
+                    'response': 'Success',
+                    'message': 'OTP sent successfully',
+                    'key': key
+                }, status=200)
+            else:
+                return Response({
+                    'response': 'Error',
+                    'message': 'Unable to send OTP. Please check the email address.'
+                }, status=200)
+        else:
+            return Response({
+                'response': 'Error',
+                'message': 'Unable to generate OTP. Please try again later.'
+            }, status=200)
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        return Response({'response': 'Error', 'message': 'Database error occurred', 'error': str(e)}, status=500)
+
+    except Exception as e:
+        session.rollback()
+        return Response({'response': 'Error', 'message': 'Unexpected error occurred', 'error': str(e)}, status=500)
+
+    finally:
+        session.close()
+        
+        
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny, ])
+def AdminverifyOtp(request):
+    session = dbsession.Session()
+    otp = request.data['otp']
+    key = request.data['key']
+    emailId = request.data['emailId']
+    try:
+
+        admin = session.query(OTP).filter(OTP.emailId == emailId, OTP.key == key).one()
+
+        date_time_str = admin.date_time
+        date_time_obj = datetime.datetime.strptime(date_time_str, '%Y-%m-%d %H:%M:%S.%f')
+        date_time = timezone.make_aware(date_time_obj)
+
+        current_time = timezone.now()
+        expiration_time = timezone.timedelta(minutes=1)
+        
+        if current_time - date_time > expiration_time:
+            session.close()
+            return Response({'response': 'Error', "message": "OTP expired"}, status=200)
+        else:
+            if admin.otp == otp:
+                return Response({'response': 'Success', 'message': 'OTP Verified'})
+            else:
+                session.close()
+                return Response({'response': 'Error', 'message': 'Incorrect OTP'})
+        
+    
+    except SQLAlchemyError as e:
+        print(e)
+        return Response({'response': 'Error', 'message': 'Try again after sometime'})
+
+    except Exception as e:
+        print(e)
+        session.rollback()
+        return Response({'response': 'Error', 'message': 'Something went wrong please try again after sometime', 'Error': str(e)})
+
+    finally:
+        session.close()
+
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny, ])
+def AdminchangePassword(request):
+        session = dbsession.Session()
+
+        try:
+            emailId = request.data.get('emailId')
+            newPwd = request.data.get('newpwd')
+            confirmPwd = request.data.get('confirmpwd')
+
+            # Check if any field is missing
+            if not emailId or not newPwd or not confirmPwd:
+                return Response({'response': 'Error', 'message': 'emailId, new password, and confirm password are required.'}, status=400)
+
+            # Check if passwords match
+            if newPwd != confirmPwd:
+                return Response({'response': 'Error', 'message': 'New password and confirm password do not match.'}, status=200)
+
+            admin = session.query(SuperAdminDtl).filter(SuperAdminDtl.emailId == emailId).one_or_none()
+
+            if admin:
+                hashed_password = make_password(newPwd)
+                admin.password = hashed_password
+                session.add(admin)
+
+                password_obj = PasswordChangeHistory()
+                password_obj.status = 'Active'
+                password_obj.changeddate = datetime.datetime.now()
+                password_obj.loginId = admin.loginId
+                password_obj.createddate = datetime.datetime.now()
+                password_obj.type = admin.type
+                session.add(password_obj)
+
+                session.commit()
+                return Response({'response': 'Success', 'message': 'Password changed successfully'},status=200)
+            else:
+                return Response({'response': 'Error', 'message': 'Admin not found'}, status=404)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({'response': 'Error', 'message': 'Database error. Please try again later.', 'Error': str(e)}, status=500)
+
+        except Exception as e:
+            session.rollback()
+            return Response({'response': 'Error', 'message': 'Something went wrong. Please try again later.', 'Error': str(e)}, status=500)
+
+        finally:
+            session.close()
+
+# -----Profile ------
+class GetProfile(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            sql_query = """
+                SELECT * 
+                FROM super_admintbl
+                WHERE status = 'Active'
+                ORDER BY id DESC
+            """
+
+            result = session.execute(sql_query)
+            rows = result.fetchall()
+
+            if not rows:
+                return Response({
+                    'response': 'Error',
+                    'message': 'No admin found'
+                }, status=status.HTTP_200_OK)
+
+            data = [dict(row) for row in rows]
+
+            return Response({
+                'response': 'Success',
+                'admin': data
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                'response': 'Error',
+                'message': 'Database error occurred',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                'response': 'Error',
+                'message': 'Unexpected error',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class AddEditBanner(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+
+    def generate_banner_id(self, session):
+        latest = session.query(Banner).order_by(Banner.id.desc()).first()
+        number = int(latest.bannerId.replace('BAN', '')) + 1 if latest and latest.bannerId else 1
+        return f"BAN{str(number).zfill(2)}"
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            banner_id = data.get('bannerId')  # Used for edit
+            title = data.get('title')
+            description = data.get('description')
+            # link = data.get('link')
+            createdId = data.get('createdId')
+            image_file = request.FILES.get('bannerurl')
+
+            image_url = None
+            if image_file and image_file.name != 'undefined':
+                image = Image.open(image_file)
+                image_io = BytesIO()
+
+                if image.mode in ("RGBA", "P"):
+                    image = image.convert("RGB")
+
+                image.save(image_io, format='WEBP', quality=75)
+                image_io.seek(0)
+
+                new_image_name = os.path.splitext(image_file.name)[0] + '.webp'
+                compressed_image = InMemoryUploadedFile(
+                    image_io, None, new_image_name, 'image/webp', sys.getsizeof(image_io), None
+                )
+
+                # fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
+
+                fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
+
+                filename = fs.save(compressed_image.name, compressed_image)
+                image_url = fs.url(filename)
+
+            # --------- Edit Logic ---------
+            if banner_id:
+                banner = session.query(Banner).filter(
+                    Banner.bannerId == banner_id,
+                    Banner.status != 'Deleted'
+                ).first()
+
+                if not banner:
+                    return Response({'response': 'Error', 'message': 'Banner not found or already deleted'}, status=404)
+
+                if title:
+                    banner.title = title
+                if description:
+                    banner.description = description
+                # if link:
+                #     banner.link = link
+                if image_url:
+                    banner.bannerurl = image_url
+
+                session.commit()
+                return Response({'response': 'Success', 'message': 'Banner updated successfully'}, status=200)
+
+            # --------- Add Logic ---------
+            # if not image_url:
+            #     return Response({'response': 'Error', 'message': 'Banner image is required for adding'}, status=400)
+
+            banner = Banner(
+                bannerId=self.generate_banner_id(session),
+                title=title,
+                description=description,
+                # link=link,
+                bannerurl=image_url,
+                status='Active',
+                createdId=createdId,
+                createddate=datetime.date.today()
+            )
+
+            session.add(banner)
+            session.commit()
+            return Response({'response': 'Success', 'message': 'Banner added successfully'}, status=200)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({'response': 'Error', 'message': 'Database error', 'errors': str(e)}, status=500)
+
+        except Exception as e:
+            session.rollback()
+            return Response({'response': 'Error', 'message': 'Unexpected error', 'errors': str(e)}, status=500)
+
+        finally:
+            session.close()
+       
+class GetBanner(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            sql_query = text("""
+                SELECT * 
+                FROM banner_tbl
+                WHERE status != 'Deleted'
+                ORDER BY id DESC
+            """)
+
+            result = session.execute(sql_query)
+            rows = result.fetchall()
+
+            if not rows:
+                return Response({
+                    'response': 'Warning',
+                    'message': 'No data found'
+                }, status=status.HTTP_200_OK)
+
+            data = [dict(row._mapping) for row in rows]
+
+            return Response({
+                'response': 'Success',
+                'banners': data
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                'response': 'Error',
+                'message': 'Database error occurred',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                'response': 'Error',
+                'message': 'Something went wrong',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class GetActiveBanner(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            sql_query = text("""
+                SELECT * 
+                FROM banner_tbl
+                WHERE status = 'Active'
+                ORDER BY id DESC
+            """)
+
+            result = session.execute(sql_query)
+            rows = result.fetchall()
+
+            if not rows:
+                return Response({
+                    'response': 'Warningr',
+                    'message': 'No active banners found'
+                }, status=status.HTTP_200_OK)
+
+            data = [dict(row._mapping) for row in rows]
+
+            return Response({
+                'response': 'Success',
+                'banners': data
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                'response': 'Error',
+                'message': 'Database error occurred',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                'response': 'Error',
+                'message': 'Unexpected error',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+            
+class GetBannerById(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            banner_id = request.data.get('banner_id')
+            id = request.data.get('id')
+
+            if not id or not banner_id:
+                return Response({
+                    'response': 'Error',
+                    'message': 'Both id and banner_id are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            sql_query = text("""
+                SELECT * 
+                FROM banner_tbl
+                WHERE id = :id AND bannerId = :banner_id
+            """)
+
+            result = session.execute(sql_query, {'id': id, 'banner_id': banner_id})
+            row = result.fetchone()
+
+            if not row:
+                return Response({
+                    'response': 'Warning',
+                    'message': 'Banner not found'
+                }, status=status.HTTP_200_OK)
+
+            data = dict(row._mapping)
+
+            return Response({
+                'response': 'Success',
+                'banner': data
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                'response': 'Error',
+                'message': 'Database error occurred',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                'response': 'Error',
+                'message': 'Something went wrong',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class UpdateBannerStatus(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            banner_id = request.data.get('banner_id')
+            status_value = request.data.get('status')
+
+            if not banner_id or not status_value:
+                return Response({
+                    'response': 'Error',
+                    'message': 'banner_id and status are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            banner = session.query(Banner).filter_by(bannerId=banner_id).first()
+
+            if not banner:
+                return Response({
+                    'response': 'Error',
+                    'message': 'Banner not found'
+                }, status=status.HTTP_200_OK)
+
+            banner.status = status_value
+            session.commit()
+
+            return Response({
+                'response': 'Success',
+                'message': "Updated Successfully"
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                'response': 'Error',
+                'message': 'Database error',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class DeleteBanner(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            banner_id = request.data.get('banner_id')
+
+            if not banner_id:
+                return Response({
+                    'response': 'Error',
+                    'message': 'banner_id is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            banner = session.query(Banner).filter_by(bannerId=banner_id).first()
+
+            if not banner:
+                return Response({
+                    'response': 'Error',
+                    'message': 'Banner not found'
+                }, status=status.HTTP_200_OK)
+
+            banner.status = 'Deleted'
+            session.commit()
+
+            return Response({
+                'response': 'Success',
+                'message': 'Banner deleted successfully'
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                'response': 'Error',
+                'message': 'Database error',
+                'errors': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class AddEditEstate(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def compress_image(self, image_file):
+        """
+        Compress the uploaded image into WEBP format
+        """
+        image = Image.open(image_file)
+        image_io = BytesIO()
+
+        # Convert RGBA/Palette → RGB for WEBP compatibility
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+
+        # Save compressed version
+        image.save(image_io, format="WEBP", quality=75)  # adjust quality (50-80) if needed
+        image_io.seek(0)
+
+        # Rename file extension to .webp
+        new_image_name = os.path.splitext(image_file.name)[0] + ".webp"
+
+        return InMemoryUploadedFile(
+            image_io,
+            None,
+            new_image_name,
+            "image/webp",
+            sys.getsizeof(image_io),
+            None,
+        )
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            estate_id = data.get("id")  # Primary key for edit
+            title = data.get("title")
+            description = data.get("description")
+            createdId = data.get("createdId")
+            image_left = request.FILES.get("image_left")
+            image_right = request.FILES.get("image_right")
+
+            # FileSystemStorage for saving images
+            fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
+
+            # Compress and save left image
+            image_left_url = None
+            if image_left and image_left.name != "undefined":
+                compressed_left = self.compress_image(image_left)
+                filename = fs.save(compressed_left.name, compressed_left)
+                image_left_url = fs.url(filename)
+
+            # Compress and save right image
+            image_right_url = None
+            if image_right and image_right.name != "undefined":
+                compressed_right = self.compress_image(image_right)
+                filename = fs.save(compressed_right.name, compressed_right)
+                image_right_url = fs.url(filename)
+
+            # ---------- Edit Logic ----------
+            if estate_id:
+                estate = session.query(EstateInfoSA).filter(
+                    EstateInfoSA.id == estate_id,
+                    EstateInfoSA.status != "Deleted"
+                ).first()
+
+                if not estate:
+                    return Response(
+                        {"response": "warning", "message": "Estate not found"},
+                        status=200,
+                    )
+
+                if title:
+                    estate.title = title
+                if description:
+                    estate.description = description
+                if image_left_url:
+                    estate.image_left = image_left_url
+                if image_right_url:
+                    estate.image_right = image_right_url
+
+                session.commit()
+                return Response(
+                    {"response": "Success", "message": "Estate updated successfully"},
+                    status=200,
+                )
+
+            # ---------- Add Logic ----------
+            estate = EstateInfoSA(
+                title=title,
+                description=description,
+                image_left=image_left_url,
+                image_right=image_right_url,
+                status="Active",
+                createdId=createdId,
+                createddate=datetime.date.today(),
+            )
+            session.add(estate)
+            session.commit()
+
+            return Response(
+                {"response": "Success", "message": "Estate added successfully"},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class AddEditTimeline(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def generate_timeline_id(self, session):
+        latest = session.query(TimelineEventSA).order_by(TimelineEventSA.id.desc()).first()
+        number = int(latest.timelineId.replace("TLN", "")) + 1 if latest and latest.timelineId else 1
+        return f"TLN{str(number).zfill(2)}"
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            timeline_id = data.get("timelineId")  # For edit
+            year_or_period = data.get("year_or_period")
+            title = data.get("title")
+            description = data.get("description")
+            order = data.get("order")
+            createdId = data.get("createdId")
+
+            # ---------- Edit Logic ----------
+            if timeline_id:
+                timeline = session.query(TimelineEventSA).filter(
+                    TimelineEventSA.timelineId == timeline_id,
+                    TimelineEventSA.status != "Deleted"
+                ).first()
+
+                if not timeline:
+                    return Response(
+                        {"response": "Error", "message": "Timeline not found"},
+                        status=404,
+                    )
+
+                if year_or_period:
+                    timeline.year_or_period = year_or_period
+                if title:
+                    timeline.title = title
+                if description:
+                    timeline.description = description
+                if order:
+                    timeline.order = order
+
+                session.commit()
+                return Response(
+                    {"response": "Success", "message": "Timeline updated successfully"},
+                    status=200,
+                )
+
+            # ---------- Add Logic ----------
+            if order is None:
+                max_order = session.query(func.max(TimelineEventSA.order)).scalar() or 0
+                order = max_order + 1
+
+            timeline = TimelineEventSA(
+                timelineId=self.generate_timeline_id(session),
+                year_or_period=year_or_period,
+                title=title,
+                description=description,
+                order=order,
+                status="Active",
+                createdId=createdId,
+                createddate=datetime.date.today(),
+            )
+            session.add(timeline)
+            session.commit()
+
+            return Response(
+                {"response": "Success", "message": "Timeline added successfully"},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class Active_GetEstateWithTimeline(APIView):
+    permission_classes = (AllowAny,)  # Public endpoint
+    authentication_classes = ()
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # Get the latest active estate (since only one estate exists)
+            estate = session.query(EstateInfoSA).filter(
+                EstateInfoSA.status == "Active"
+            ).order_by(EstateInfoSA.id.desc()).first()
+
+            if not estate:
+                return Response(
+                    {"response": "Error", "message": "No estate found"},
+                    status=404,
+                )
+
+            # Build estate dict
+            estate_data = {
+                "estateId": f"EST{str(estate.id).zfill(2)}",
+                "title": estate.title,
+                "subtitle": "About the Estate",   # since it's static
+                "description": estate.description,
+                "image_left": estate.image_left,
+                "image_right": estate.image_right,
+            }
+
+            # Fetch ordered timelines
+            timelines = session.query(TimelineEventSA).filter(
+                TimelineEventSA.status == "Active"
+            ).order_by(TimelineEventSA.order.asc()).all()
+
+            timeline_data = [
+                {
+                    "timelineId": t.timelineId,
+                    "year_or_period": t.year_or_period,
+                    "title": t.title,
+                    "description": t.description,
+                    "order": t.order,
+                }
+                for t in timelines
+            ]
+
+            return Response(
+                {"estate": estate_data, "timeline": timeline_data},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class GetEstate(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # Get the latest active estate (since only one exists)
+            estate = session.query(EstateInfoSA).filter(
+                EstateInfoSA.status != "Deleted"
+            ).order_by(EstateInfoSA.id.desc()).first()
+
+            if not estate:
+                return Response(
+                    {"response": "Warning", "message": "No estate found"},
+                    status=200,
+                )
+
+            estate_data = {
+                "estateId": estate.id,
+                "title": estate.title,
+                # "subtitle": "About the Estate",   # static if needed
+                "description": estate.description,
+                "image_left": estate.image_left,
+                "image_right": estate.image_right,
+            }
+
+            return Response({"estate": estate_data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+class GetTimeline(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            timelines = session.query(TimelineEventSA).filter(
+                TimelineEventSA.status != "Deleted"
+            ).order_by(TimelineEventSA.order.asc()).all()
+
+            if not timelines:
+                return Response(
+                    {"response": "Warning", "message": "No timeline events found"},
+                    status=200,
+                )
+
+            timeline_data = [
+                {
+                    "timelineId": t.timelineId,
+                    "year_or_period": t.year_or_period,
+                    "title": t.title,
+                    "description": t.description,
+                    "order": t.order,
+                    "Status": t.status,
+                    "createdDate": t.createddate
+                }
+                for t in timelines
+            ]
+
+            return Response({"response": "Success","timeline": timeline_data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+class Active_GetEstate(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # Get the latest active estate (since only one exists)
+            estate = session.query(EstateInfoSA).filter(
+                EstateInfoSA.status == "Active"
+            ).order_by(EstateInfoSA.id.desc()).first()
+
+            if not estate:
+                return Response(
+                    {"response": "Error", "message": "No estate found"},
+                    status=404,
+                )
+
+            estate_data = {
+                "estateId": f"EST{str(estate.id).zfill(2)}",
+                "title": estate.title,
+                "subtitle": "About the Estate",   # static if needed
+                "description": estate.description,
+                "image_left": estate.image_left,
+                "image_right": estate.image_right,
+            }
+
+            return Response({"estate": estate_data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+class Active_GetTimeline(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            timelines = session.query(TimelineEventSA).filter(
+                TimelineEventSA.status == "Active"
+            ).order_by(TimelineEventSA.order.asc()).all()
+
+            if not timelines:
+                return Response(
+                    {"response": "Error", "message": "No timeline events found"},
+                    status=404,
+                )
+
+            timeline_data = [
+                {
+                    "timelineId": t.timelineId,
+                    "year_or_period": t.year_or_period,
+                    "title": t.title,
+                    "description": t.description,
+                    "order": t.order,
+                }
+                for t in timelines
+            ]
+
+            return Response({"timeline": timeline_data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+class GetEstateById(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            estate_id = request.data.get("id")
+
+            if not estate_id:
+                return Response({
+                    "response": "Error",
+                    "message": "Estate id is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            sql_query = text("""
+                SELECT * 
+                FROM estateinfo_tbl
+                WHERE id = :id AND status != 'Deleted'
+            """)
+
+            result = session.execute(sql_query, {"id": estate_id})
+            row = result.fetchone()
+
+            if not row:
+                return Response({
+                    "response": "Warning",
+                    "message": "Estate not found"
+                }, status=status.HTTP_200_OK)
+
+            data = dict(row._mapping)
+
+            return Response({
+                "response": "Success",
+                "estate": data
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "Error",
+                "message": "Database error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                "response": "Error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+
+class GetTimelineById(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            timeline_id = request.data.get("id")
+            timeline_code = request.data.get("timelineId")
+
+            if not timeline_id or not timeline_code:
+                return Response({
+                    "response": "Error",
+                    "message": "Both id and timelineId are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            sql_query = text("""
+                SELECT * 
+                FROM timeline_tbl
+                WHERE id = :id AND timelineId = :timelineId AND status != 'Deleted'
+            """)
+
+            result = session.execute(sql_query, {"id": timeline_id, "timelineId": timeline_code})
+            row = result.fetchone()
+
+            if not row:
+                return Response({
+                    "response": "Warning",
+                    "message": "Timeline not found"
+                }, status=status.HTTP_200_OK)
+
+            data = dict(row._mapping)
+
+            return Response({
+                "response": "Success",
+                "timeline": data
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "Error",
+                "message": "Database error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                "response": "Error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class UpdateEstateStatus(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            estate_id = request.data.get("estate_id")
+            status_value = request.data.get("status")
+
+            if not estate_id or not status_value:
+                return Response({
+                    "response": "Error",
+                    "message": "estate_id and status are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            estate = session.query(EstateInfoSA).filter_by(id=estate_id).first()
+
+            if not estate:
+                return Response({
+                    "response": "Error",
+                    "message": "Estate not found"
+                }, status=status.HTTP_200_OK)
+
+            estate.status = status_value
+            session.commit()
+
+            return Response({
+                "response": "Success",
+                "message": "Estate status updated successfully"
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "Error",
+                "message": "Database error",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class UpdateTimelineStatus(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            timeline_id = request.data.get("timeline_id")
+            status_value = request.data.get("status")
+
+            if not timeline_id or not status_value:
+                return Response({
+                    "response": "Error",
+                    "message": "timeline_id and status are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            timeline = session.query(TimelineEventSA).filter_by(id=timeline_id).first()
+
+            if not timeline:
+                return Response({
+                    "response": "Error",
+                    "message": "Timeline not found"
+                }, status=status.HTTP_200_OK)
+
+            timeline.status = status_value
+            session.commit()
+
+            return Response({
+                "response": "Success",
+                "message": "Timeline status updated successfully"
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "Error",
+                "message": "Database error",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class DeleteEstate(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            estate_id = request.data.get("estate_id")
+
+            if not estate_id:
+                return Response({
+                    "response": "Error",
+                    "message": "estate_id is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            estate = session.query(EstateInfoSA).filter_by(id=estate_id).first()
+
+            if not estate:
+                return Response({
+                    "response": "Error",
+                    "message": "Estate not found"
+                }, status=status.HTTP_200_OK)
+
+            estate.status = "Deleted"
+            session.commit()
+
+            return Response({
+                "response": "Success",
+                "message": "Estate deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "Error",
+                "message": "Database error",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
+
+class DeleteTimeline(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            timeline_id = request.data.get("timeline_id")
+
+            if not timeline_id:
+                return Response({
+                    "response": "Error",
+                    "message": "timeline_id is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            timeline = session.query(TimelineEventSA).filter_by(id=timeline_id).first()
+
+            if not timeline:
+                return Response({
+                    "response": "Error",
+                    "message": "Timeline not found"
+                }, status=status.HTTP_200_OK)
+
+            timeline.status = "Deleted"
+            session.commit()
+
+            return Response({
+                "response": "Success",
+                "message": "Timeline deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "Error",
+                "message": "Database error",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+            session.close()
