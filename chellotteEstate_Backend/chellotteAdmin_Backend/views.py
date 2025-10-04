@@ -15,8 +15,8 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import aliased
 # from rest_framework.parsers import MultiPartParser, FormParser
 # from django.core.files.uploadedfile import UploadedFile
-# from django.core.files.storage import default_storage
-# from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from django.contrib.auth.hashers import make_password, check_password
@@ -887,6 +887,7 @@ class AddEditEstate(APIView):
         finally:
             session.close()
 
+
 class AddEditTimeline(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_classes = (TokenAuthentication,)
@@ -907,6 +908,12 @@ class AddEditTimeline(APIView):
             order = data.get("order")
             createdId = data.get("createdId")
 
+            if not year_or_period:
+                return Response(
+                    {"response": "Error", "message": "year_or_period is required"},
+                    status=400
+                )
+
             # ---------- Edit Logic ----------
             if timeline_id:
                 timeline = session.query(TimelineEventSA).filter(
@@ -916,12 +923,23 @@ class AddEditTimeline(APIView):
 
                 if not timeline:
                     return Response(
-                        {"response": "Error", "message": "Timeline not found"},
-                        status=404,
+                        {"response": "warning", "message": "Timeline not found"},
+                        status=200,
                     )
 
-                if year_or_period:
-                    timeline.year_or_period = year_or_period
+                # Check duplicate for other records
+                duplicate = session.query(TimelineEventSA).filter(
+                    TimelineEventSA.year_or_period == year_or_period,
+                    TimelineEventSA.timelineId != timeline_id,
+                    TimelineEventSA.status != "Deleted"
+                ).first()
+                if duplicate:
+                    return Response(
+                        {"response": "Warning", "message": "year_or_period already exists"},
+                        status=200
+                    )
+
+                timeline.year_or_period = year_or_period
                 if title:
                     timeline.title = title
                 if description:
@@ -935,7 +953,17 @@ class AddEditTimeline(APIView):
                     status=200,
                 )
 
-            # ---------- Add Logic ----------
+            # Check duplicate
+            duplicate = session.query(TimelineEventSA).filter(
+                TimelineEventSA.year_or_period == year_or_period,
+                TimelineEventSA.status != "Deleted"
+            ).first()
+            if duplicate:
+                return Response(
+                    {"response": "Warning", "message": "year_or_period already exists"},
+                    status=200
+                )
+
             if order is None:
                 max_order = session.query(func.max(TimelineEventSA.order)).scalar() or 0
                 order = max_order + 1
@@ -974,6 +1002,94 @@ class AddEditTimeline(APIView):
 
         finally:
             session.close()
+
+# class AddEditTimeline(APIView):
+#     permission_classes = (IsAuthenticated,)
+#     authentication_classes = (TokenAuthentication,)
+
+#     def generate_timeline_id(self, session):
+#         latest = session.query(TimelineEventSA).order_by(TimelineEventSA.id.desc()).first()
+#         number = int(latest.timelineId.replace("TLN", "")) + 1 if latest and latest.timelineId else 1
+#         return f"TLN{str(number).zfill(2)}"
+
+#     def post(self, request):
+#         session = dbsession.Session()
+#         try:
+#             data = request.data
+#             timeline_id = data.get("timelineId")  # For edit
+#             year_or_period = data.get("year_or_period")
+#             title = data.get("title")
+#             description = data.get("description")
+#             order = data.get("order")
+#             createdId = data.get("createdId")
+
+#             # ---------- Edit Logic ----------
+#             if timeline_id:
+#                 timeline = session.query(TimelineEventSA).filter(
+#                     TimelineEventSA.timelineId == timeline_id,
+#                     TimelineEventSA.status != "Deleted"
+#                 ).first()
+
+#                 if not timeline:
+#                     return Response(
+#                         {"response": "Error", "message": "Timeline not found"},
+#                         status=404,
+#                     )
+
+#                 if year_or_period:
+#                     timeline.year_or_period = year_or_period
+#                 if title:
+#                     timeline.title = title
+#                 if description:
+#                     timeline.description = description
+#                 if order:
+#                     timeline.order = order
+
+#                 session.commit()
+#                 return Response(
+#                     {"response": "Success", "message": "Timeline updated successfully"},
+#                     status=200,
+#                 )
+
+#             # ---------- Add Logic ----------
+#             if order is None:
+#                 max_order = session.query(func.max(TimelineEventSA.order)).scalar() or 0
+#                 order = max_order + 1
+
+#             timeline = TimelineEventSA(
+#                 timelineId=self.generate_timeline_id(session),
+#                 year_or_period=year_or_period,
+#                 title=title,
+#                 description=description,
+#                 order=order,
+#                 status="Active",
+#                 createdId=createdId,
+#                 createddate=datetime.date.today(),
+#             )
+#             session.add(timeline)
+#             session.commit()
+
+#             return Response(
+#                 {"response": "Success", "message": "Timeline added successfully"},
+#                 status=200,
+#             )
+
+#         except SQLAlchemyError as e:
+#             session.rollback()
+#             return Response(
+#                 {"response": "Error", "message": "Database error", "errors": str(e)},
+#                 status=500,
+#             )
+
+#         except Exception as e:
+#             session.rollback()
+#             return Response(
+#                 {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+#                 status=500,
+#             )
+
+#         finally:
+#             session.close()
 
 class Active_GetEstateWithTimeline(APIView):
     permission_classes = (AllowAny,)  # Public endpoint
@@ -1047,26 +1163,36 @@ class GetEstate(APIView):
         session = dbsession.Session()
         try:
             # Get the latest active estate (since only one exists)
-            estate = session.query(EstateInfoSA).filter(
+            estates = session.query(EstateInfoSA).filter(
                 EstateInfoSA.status != "Deleted"
-            ).order_by(EstateInfoSA.id.desc()).first()
+            ).order_by(EstateInfoSA.id.desc()).all()
 
-            if not estate:
+            if not estates:
                 return Response(
                     {"response": "Warning", "message": "No estate found"},
                     status=200,
                 )
 
-            estate_data = {
-                "estateId": estate.id,
-                "title": estate.title,
-                # "subtitle": "About the Estate",   # static if needed
-                "description": estate.description,
-                "image_left": estate.image_left,
-                "image_right": estate.image_right,
-            }
+            # estate_data = {
+            #     "estateId": estate.id,
+            #     "title": estate.title,
+            #     # "subtitle": "About the Estate",   # static if needed
+            #     "description": estate.description,
+            #     "image_left": estate.image_left,
+            #     "image_right": estate.image_right,
+            # }
+            estate_data = [
+                {
+                    "estateId": e.id,
+                    "title": e.title,
+                    "description": e.description,
+                    "image_left": e.image_left,
+                    "image_right": e.image_right,
+                }
+                for e in estates
+            ]
 
-            return Response({"estate": estate_data}, status=200)
+            return Response({"response": "success","estate": estate_data}, status=200)
 
         except SQLAlchemyError as e:
             return Response(
@@ -1136,7 +1262,7 @@ class Active_GetEstate(APIView):
             # Get the latest active estate (since only one exists)
             estate = session.query(EstateInfoSA).filter(
                 EstateInfoSA.status == "Active"
-            ).order_by(EstateInfoSA.id.desc()).first()
+            ).order_by(EstateInfoSA.id.desc()).all()
 
             if not estate:
                 return Response(
@@ -1144,14 +1270,25 @@ class Active_GetEstate(APIView):
                     status=404,
                 )
 
-            estate_data = {
-                "estateId": f"EST{str(estate.id).zfill(2)}",
-                "title": estate.title,
-                "subtitle": "About the Estate",   # static if needed
-                "description": estate.description,
-                "image_left": estate.image_left,
-                "image_right": estate.image_right,
-            }
+            # estate_data = {
+            #     "estateId": f"EST{str(estate.id).zfill(2)}",
+            #     "title": estate.title,
+            #     "subtitle": "About the Estate",   # static if needed
+            #     "description": estate.description,
+            #     "image_left": estate.image_left,
+            #     "image_right": estate.image_right,
+            # }
+
+            estate_data = [
+                {
+                    "estateId": e.id,
+                    "title": e.title,
+                    "description": e.description,
+                    "image_left": e.image_left,
+                    "image_right": e.image_right,
+                }
+                for e in estate
+            ]
 
             return Response({"estate": estate_data}, status=200)
 
@@ -1181,8 +1318,8 @@ class Active_GetTimeline(APIView):
 
             if not timelines:
                 return Response(
-                    {"response": "Error", "message": "No timeline events found"},
-                    status=404,
+                    {"response": "Warning", "message": "No timeline events found"},
+                    status=200,
                 )
 
             timeline_data = [
@@ -1192,6 +1329,8 @@ class Active_GetTimeline(APIView):
                     "title": t.title,
                     "description": t.description,
                     "order": t.order,
+                    "Status": t.status,
+                    "createdDate": t.createddate,
                 }
                 for t in timelines
             ]
@@ -1274,22 +1413,22 @@ class GetTimelineById(APIView):
     def post(self, request):
         session = dbsession.Session()
         try:
-            timeline_id = request.data.get("id")
+            # timeline_id = request.data.get("id")
             timeline_code = request.data.get("timelineId")
 
-            if not timeline_id or not timeline_code:
+            if not timeline_code:
                 return Response({
                     "response": "Error",
-                    "message": "Both id and timelineId are required"
+                    "message": "timelineId is required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             sql_query = text("""
                 SELECT * 
                 FROM timeline_tbl
-                WHERE id = :id AND timelineId = :timelineId AND status != 'Deleted'
+                WHERE timelineId = :timelineId AND status != 'Deleted'
             """)
 
-            result = session.execute(sql_query, {"id": timeline_id, "timelineId": timeline_code})
+            result = session.execute(sql_query, {"timelineId": timeline_code})
             row = result.fetchone()
 
             if not row:
@@ -1382,11 +1521,11 @@ class UpdateTimelineStatus(APIView):
                     "message": "timeline_id and status are required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            timeline = session.query(TimelineEventSA).filter_by(id=timeline_id).first()
+            timeline = session.query(TimelineEventSA).filter_by(timelineId=timeline_id).first()
 
             if not timeline:
                 return Response({
-                    "response": "Error",
+                    "response": "Warning",
                     "message": "Timeline not found"
                 }, status=status.HTTP_200_OK)
 
@@ -1466,11 +1605,11 @@ class DeleteTimeline(APIView):
                     "message": "timeline_id is required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            timeline = session.query(TimelineEventSA).filter_by(id=timeline_id).first()
+            timeline = session.query(TimelineEventSA).filter_by(timelineId=timeline_id).first()
 
             if not timeline:
                 return Response({
-                    "response": "Error",
+                    "response": "Warning",
                     "message": "Timeline not found"
                 }, status=status.HTTP_200_OK)
 
@@ -1490,5 +1629,1656 @@ class DeleteTimeline(APIView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        finally:
+            session.close()
+
+class AddEditGallery(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def compress_image(self, uploaded_file, quality=70):
+        """
+        Compress uploaded image and return compressed file path
+        """
+        try:
+            # Open image with Pillow
+            img = Image.open(uploaded_file)
+            img_io = BytesIO()
+
+            # Convert all images to JPEG for compression (unless PNG with transparency)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+
+            img.save(img_io, format="JPEG", quality=quality, optimize=True)
+            return ContentFile(img_io.getvalue(), name=uploaded_file.name)
+        except Exception as e:
+            raise Exception(f"Image compression failed: {str(e)}")
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            gallery_id = data.get("id")  # for edit
+            title = data.get("title")
+            status = data.get("status", "Active")
+            createdId = data.get("createdId")
+            createddate = datetime.date.today()
+
+            # Get image if uploaded
+            image_file = request.FILES.get("image")
+
+            # ---------- Edit Logic ----------
+            if gallery_id:
+                gallery = session.query(GallerySA).filter(
+                    GallerySA.id == gallery_id,
+                    GallerySA.status != "Deleted"
+                ).first()
+
+                if not gallery:
+                    return Response(
+                        {"response": "Error", "message": "Gallery item not found"},
+                        status=404,
+                    )
+
+                # Duplicate title check (exclude self)
+                duplicate = session.query(GallerySA).filter(
+                    func.lower(GallerySA.title) == title.lower(),
+                    GallerySA.id != gallery_id,
+                    GallerySA.status != "Deleted"
+                ).first()
+                if duplicate:
+                    return Response(
+                        {"response": "Error", "message": "Title already exists"},
+                        status=400,
+                    )
+
+                # Update fields
+                if title:
+                    gallery.title = title
+                if status:
+                    gallery.status = status
+                if image_file:
+                    compressed_image = self.compress_image(image_file)
+                    # Store path or binary depending on your model
+                    gallery.image = f"gallery/{compressed_image.name}"
+                    # Save to Django media storage
+                    # from django.core.files.storage import default_storage
+                    default_storage.save(f"gallery/{compressed_image.name}", compressed_image)
+
+                session.commit()
+                return Response(
+                    {"response": "Success", "message": "Gallery updated successfully"},
+                    status=200,
+                )
+
+            # Duplicate title check
+            duplicate = session.query(GallerySA).filter(
+                func.lower(GallerySA.title) == title.lower(),
+                GallerySA.status != "Deleted"
+            ).first()
+            if duplicate:
+                return Response(
+                    {"response": "Error", "message": "Title already exists"},
+                    status=400,
+                )
+
+            # Handle image
+            image_path = None
+            if image_file:
+                compressed_image = self.compress_image(image_file)
+                image_path = f"gallery/{compressed_image.name}"
+                # from django.core.files.storage import default_storage
+                default_storage.save(f"gallery/{compressed_image.name}", compressed_image)
+
+            gallery = GallerySA(
+                title=title,
+                image=image_path,
+                status=status,
+                createdId=createdId,
+                createddate=createddate,
+            )
+            session.add(gallery)
+            session.commit()
+
+            return Response(
+                {"response": "Success", "message": "Gallery added successfully"},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+class GetGallery(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # Fetch all non-deleted galleries
+            galleries = (
+                session.query(GallerySA)
+                .filter(GallerySA.status != "Deleted")
+                .order_by(GallerySA.id.desc())
+                .all()
+            )
+            if not galleries:  
+                return Response(
+                    {
+                        "response": "Warning",
+                        "message": "No gallery data found",
+                        "count": 0,
+                        "data": [],
+                    },
+                    status=200,
+                )
+            data = [
+                {
+                    "id": g.id,
+                    "title": g.title,
+                    "image": g.image,
+                    "status": g.status,
+                    "createdId": g.createdId,
+                    "createddate": g.createddate,
+                }
+                for g in galleries
+            ]
+
+            return Response(
+                {"response": "Success", "count": len(data), "data": data},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+class Active_GetGallery(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            galleries = (
+                session.query(GallerySA)
+                .filter(GallerySA.status == "Active")
+                .order_by(GallerySA.id.desc())
+                .all()
+            )
+            if not galleries:  
+                return Response(
+                    {
+                        "response": "Warning",
+                        "message": "No gallery data found",
+                        "count": 0,
+                        "data": [],
+                    },
+                    status=200,
+                )
+            data = [
+                {
+                    "id": g.id,
+                    "title": g.title,
+                    "image": g.image,
+                    "status": g.status,
+                    "createdId": g.createdId,
+                    "createddate": g.createddate,
+                }
+                for g in galleries
+            ]
+
+            return Response(
+                {"response": "Success", "count": len(data), "data": data},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+class GetGalleryById(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            gallery_id = data.get("id")
+            gallery = session.query(GallerySA).filter(
+                GallerySA.id == gallery_id,
+                GallerySA.status != "Deleted"
+            ).first()
+
+            if not gallery:
+                return Response(
+                    {"response": "Warning", "message": "Gallery not found"},
+                    status=200,
+                )
+
+            data = {
+                "galleryId": gallery.id,
+                "title": gallery.title,
+                "image": gallery.image,
+                "status": gallery.status,
+            }
+
+            return Response(
+                {"response": "Success", "data": data},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class UpdateGalleryStatus(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            gallery_id = data.get("id")
+            status = data.get("status")  
+
+            if not gallery_id or not status:
+                return Response(
+                    {"response": "Error", "message": "galleryId and status are required"},
+                    status=400,
+                )
+
+            gallery = session.query(GallerySA).filter(
+                GallerySA.id == gallery_id,
+                GallerySA.status != "Deleted"
+            ).first()
+
+            if not gallery:
+                return Response(
+                    {"response": "Warning", "message": "Gallery not found"},
+                    status=200,
+                )
+
+            gallery.status = status
+            session.commit()
+
+            return Response(
+                {"response": "Success", "message": "Gallery status updated successfully"},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class DeleteGallery(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            gallery_id = data.get("id")
+            gallery = session.query(GallerySA).filter(
+                GallerySA.id == gallery_id,
+                GallerySA.status != "Deleted"
+            ).first()
+
+            if not gallery:
+                return Response(
+                    {"response": "Error", "message": "Gallery not found"},
+                    status=404,
+                )
+
+            gallery.status = "Deleted"
+            session.commit()
+
+            return Response(
+                {"response": "Success", "message": "Gallery deleted successfully"},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class AddEditAboutPage(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def compress_image_webp(self, uploaded_file, quality=70):
+        """
+        Compress uploaded image and convert to WebP format
+        Returns Django ContentFile
+        """
+        try:
+            img = Image.open(uploaded_file)
+
+            # Convert all images to RGB (WebP does not support transparency in all cases)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+
+            img_io = BytesIO()
+            img.save(img_io, format="WEBP", quality=quality, method=6)
+            filename = uploaded_file.name.rsplit(".", 1)[0] + ".webp"
+            return ContentFile(img_io.getvalue(), name=filename)
+
+        except Exception as e:
+            raise Exception(f"Image conversion to WebP failed: {str(e)}")
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            box_description = data.get("box_description")
+            about_id = data.get("id")  # For edit
+            status = data.get("status", "Active")
+            createdId = data.get("createdId", "system")
+            createddate = datetime.datetime.now()
+
+            # Prepare section fields
+            sec_fields = {}
+            for i in range(1, 4):
+                sec_fields[f"sec{i}_heading"] = data.get(f"sec{i}_heading")
+                sec_fields[f"sec{i}_subheading"] = data.get(f"sec{i}_subheading")
+
+                if f"sec{i}_image" in request.FILES:
+                    compressed_image = self.compress_image_webp(request.FILES[f"sec{i}_image"])
+                    # Save compressed image to static/uploads/about/section{i}/
+                    folder_path = f"uploads/about/section{i}/"
+                    os.makedirs(folder_path, exist_ok=True)
+                    path = os.path.join(folder_path, compressed_image.name)
+                    with open(path, 'wb') as f:
+                        f.write(compressed_image.read())
+                    sec_fields[f"sec{i}_image"] = path
+                else:
+                    sec_fields[f"sec{i}_image"] = None
+
+            years_of_experience = int(data.get("years_of_experience", 0))
+
+            # ---------- Edit Logic ----------
+            if about_id:
+                about = session.query(AboutPageSA).filter(
+                    AboutPageSA.id == about_id
+                ).first()
+
+                if not about:
+                    return Response(
+                        {"response": "Error", "message": "About page not found"},
+                        status=404,
+                    )
+
+                for key, value in sec_fields.items():
+                    if value is not None:
+                        setattr(about, key, value)
+                about.years_of_experience = years_of_experience
+                about.status = status
+                about.createdId = createdId
+                about.createddate = createddate
+                about.box_description = box_description
+
+                session.commit()
+                session.refresh(about)
+
+                return Response(
+                    {"response": "Success", "message": "About page updated successfully"},
+                    status=200,
+                )
+
+            # ---------- Add Logic ----------
+            about = AboutPageSA(
+                years_of_experience=years_of_experience,
+                status=status,
+                createdId=createdId,
+                box_description=box_description,
+                createddate=createddate,
+                **sec_fields
+            )
+            session.add(about)
+            session.commit()
+            session.refresh(about)
+
+            return Response(
+                {"response": "Success", "message": "About page added successfully", "id": about.id},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class GetAboutPage(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # Fetch all non-deleted AboutPage records
+            about_list = session.query(AboutPageSA)\
+                .filter(AboutPageSA.status != "Deleted")\
+                .order_by(AboutPageSA.id.desc())\
+                .all()
+
+            if not about_list:
+                return Response(
+                    {
+                        "response": "Warning",
+                        "message": "No AboutPage data found",
+                        "count": 0,
+                        "data": []
+                    },
+                    status=200
+                )
+
+            data = []
+            for a in about_list:
+                data.append({
+                    "id": a.id,
+                    "box_description":a.box_description,
+                    "years_of_experience": a.years_of_experience,
+                    "status": a.status,
+                    "createdId": a.createdId,
+                    "createddate": a.createddate,
+                    "sec1_heading": a.sec1_heading,
+                    "sec1_subheading": a.sec1_subheading,
+                    "sec1_image": a.sec1_image,
+                    "sec2_heading": a.sec2_heading,
+                    "sec2_subheading": a.sec2_subheading,
+                    "sec2_image": a.sec2_image,
+                    "sec3_heading": a.sec3_heading,
+                    "sec3_subheading": a.sec3_subheading,
+                    "sec3_image": a.sec3_image,
+                })
+
+            return Response(
+                {"response": "Success", "count": len(data), "data": data},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500
+            )
+
+        finally:
+            session.close()
+
+class Active_GetAboutPage(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # Fetch all non-deleted AboutPage records
+            about_list = session.query(AboutPageSA)\
+                .filter(AboutPageSA.status == "Active")\
+                .order_by(AboutPageSA.id.desc())\
+                .all()
+
+            if not about_list:
+                return Response(
+                    {
+                        "response": "Warning",
+                        "message": "No AboutPage data found",
+                        "count": 0,
+                        "data": []
+                    },
+                    status=200
+                )
+
+            data = []
+            for a in about_list:
+                data.append({
+                    "id": a.id,
+                    "box_description":a.box_description,
+                    "years_of_experience": a.years_of_experience,
+                    "status": a.status,
+                    "createdId": a.createdId,
+                    "createddate": a.createddate,
+                    "sec1_heading": a.sec1_heading,
+                    "sec1_subheading": a.sec1_subheading,
+                    "sec1_image": a.sec1_image,
+                    "sec2_heading": a.sec2_heading,
+                    "sec2_subheading": a.sec2_subheading,
+                    "sec2_image": a.sec2_image,
+                    "sec3_heading": a.sec3_heading,
+                    "sec3_subheading": a.sec3_subheading,
+                    "sec3_image": a.sec3_image,
+                })
+
+            return Response(
+                {"response": "Success", "count": len(data), "data": data},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500
+            )
+
+        finally:
+            session.close()
+
+class GetAboutPageById(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            about_id = data.get("id")
+            # Query AboutPage by ID
+            about = session.query(AboutPageSA).filter(
+                AboutPageSA.id == about_id,
+                # AboutPageSA.status == "Active" 
+            ).first()
+
+            if not about:
+                return Response(
+                    {"response": "Warning", "message": "About page not found"},
+                    status=200,
+                )
+
+            data = {
+                "id": about.id,
+                "box_description": about.box_description,
+                "sec1_heading": about.sec1_heading,
+                "sec1_subheading": about.sec1_subheading,
+                "sec1_image": about.sec1_image,
+                "sec2_heading": about.sec2_heading,
+                "sec2_subheading": about.sec2_subheading,
+                "sec2_image": about.sec2_image,
+                "sec3_heading": about.sec3_heading,
+                "sec3_subheading": about.sec3_subheading,
+                "sec3_image": about.sec3_image,
+                "years_of_experience": about.years_of_experience,
+                "status": about.status,
+                "createdId": about.createdId,
+                "createddate": about.createddate,
+            }
+
+            return Response({"response": "Success", "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+
+class UpdateAboutPageStatus(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            about_id = data.get("id")
+            new_status = data.get("status")
+
+            # Validate input
+            if not about_id or not new_status:
+                return Response(
+                    {"response": "Error", "message": "'id' and 'status' are required"},
+                    status=400,
+                )
+
+            # Fetch row excluding deleted
+            about = session.query(AboutPageSA).filter(
+                AboutPageSA.id == about_id,
+                func.lower(AboutPageSA.status) != "deleted"
+            ).first()
+
+            if not about:
+                return Response(
+                    {"response": "Error", "message": "About page not found or deleted"},
+                    status=404,
+                )
+
+            # Update status
+            about.status = new_status
+            session.commit()
+            session.refresh(about)
+
+            return Response(
+                {"response": "Success", "message": f"Status updated to '{new_status}' successfully"},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500
+            )
+
+        finally:
+            session.close()
+
+class DeleteAboutPage(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            about_id = data.get("id")
+            # Fetch the AboutPage by ID and not already deleted
+            about = session.query(AboutPageSA).filter(
+                AboutPageSA.id == about_id,
+                AboutPageSA.status != "Deleted"
+            ).first()
+
+            if not about:
+                return Response(
+                    {"response": "Warning", "message": "About page not found or already deleted"},
+                    status=200,
+                )
+
+            # Soft delete
+            about.status = "Deleted"
+            session.commit()
+            session.refresh(about)
+
+            return Response(
+                {"response": "Success", "message": "About page deleted successfully"},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class AddEditEstateAddress(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            estate_id = data.get("id") 
+            email = data.get("email")
+            phone_number = data.get("phone_number")
+            address = data.get("address")
+            map_location = data.get("map_location")  # Optional
+            status = data.get("status", "Active")
+            createdId = data.get("createdId", "system")
+            createddate = data.get("createddate", datetime.datetime.now().strftime("%Y-%m-%d"))
+
+            if not email or not phone_number or not address:
+                return Response(
+                    {"response": "Error", "message": "Email, phone number, and address are required"},
+                    status=400
+                )
+
+            # ---------- Edit Logic ----------
+            if estate_id:
+                estate = session.query(EstateAddressSA).filter(
+                    EstateAddressSA.id == estate_id
+                ).first()
+
+                if not estate:
+                    return Response(
+                        {"response": "Warning", "message": "Estate address not found"},
+                        status=200
+                    )
+
+                estate.email = email
+                estate.phone_number = phone_number
+                estate.address = address
+                if map_location is not None:
+                    estate.map_location = map_location
+                estate.status = status
+                estate.createdId = createdId
+                estate.createddate = createddate
+
+                session.commit()
+                session.refresh(estate)
+
+                return Response(
+                    {"response": "Success", "message": "Estate address updated successfully"},
+                    status=200
+                )
+
+            # ---------- Add Logic ----------
+            estate = EstateAddressSA(
+                email=email,
+                phone_number=phone_number,
+                address=address,
+                map_location=map_location,
+                status=status,
+                createdId=createdId,
+                createddate=createddate
+            )
+            session.add(estate)
+            session.commit()
+            session.refresh(estate)
+
+            return Response(
+                {"response": "Success", "message": "Estate address added successfully", "id": estate.id},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500
+            )
+
+        finally:
+            session.close()
+
+class GetEstateAddress(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            estate_id = request.data.get("id")  
+
+            query = session.query(EstateAddressSA).filter(EstateAddressSA.status != "Deleted")
+
+            if estate_id:  # If ID is provided, filter by it
+                query = query.filter(EstateAddressSA.id == estate_id)
+
+            estates = query.order_by(EstateAddressSA.id.desc()).all()
+
+            if not estates:
+                return Response(
+                    {"response": "Warning", "message": "No estate address found", "count": 0, "data": []},
+                    status=200
+                )
+
+            data = [
+                {
+                    "id": e.id,
+                    "email": e.email,
+                    "phone_number": e.phone_number,
+                    "address": e.address,
+                    "map_location": e.map_location,
+                    "status": e.status,
+                    "createdId": e.createdId,
+                    "createddate": e.createddate,
+                }
+                for e in estates
+            ]
+
+            return Response(
+                {"response": "Success", "count": len(data), "data": data},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500
+            )
+
+        finally:
+            session.close()
+
+class Active_GetEstateAddress(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            estate_id = request.data.get("id")  # Optional: fetch specific address
+
+            query = session.query(EstateAddressSA).filter(EstateAddressSA.status != "Deleted")
+
+            if estate_id:  # If ID is provided, filter by it
+                query = query.filter(EstateAddressSA.id == estate_id)
+
+            estates = query.order_by(EstateAddressSA.id.desc()).all()
+
+            if not estates:
+                return Response(
+                    {"response": "Warning", "message": "No estate address found", "count": 0, "data": []},
+                    status=200
+                )
+
+            data = [
+                {
+                    "id": e.id,
+                    "email": e.email,
+                    "phone_number": e.phone_number,
+                    "address": e.address,
+                    "map_location": e.map_location,
+                    "status": e.status,
+                    "createdId": e.createdId,
+                    "createddate": e.createddate,
+                }
+                for e in estates
+            ]
+
+            return Response(
+                {"response": "Success", "count": len(data), "data": data},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500
+            )
+
+        finally:
+            session.close()
+
+
+class GetEstateAddressByID(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            estate_id = request.data.get("id")
+
+            # Warn if ID not provided
+            if not estate_id:
+                return Response(
+                    {"response": "Warning", "message": "Estate address 'id' is required"},
+                    status=200
+                )
+
+            estate = session.query(EstateAddressSA).filter(
+                EstateAddressSA.id == estate_id,
+                EstateAddressSA.status != "Deleted"
+            ).first()
+
+            if not estate:
+                return Response(
+                    {"response": "Warning", "message": "No estate address found"},
+                    status=200
+                )
+
+            data = {
+                "id": estate.id,
+                "email": estate.email,
+                "phone_number": estate.phone_number,
+                "address": estate.address,
+                "map_location": estate.map_location,
+                "status": estate.status,
+                "createdId": estate.createdId,
+                "createddate": estate.createddate,
+            }
+
+            return Response(
+                {"response": "Success", "data": data},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500
+            )
+
+        finally:
+            session.close()
+
+class UpdateEstateAddressStatus(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            estate_id = request.data.get("id")
+            new_status = request.data.get("status")
+
+            if not estate_id or not new_status:
+                return Response(
+                    {"response": "Error", "message": "Both 'id' and 'status' are required"},
+                    status=400,
+                )
+
+            estate = session.query(EstateAddressSA).filter(EstateAddressSA.id == estate_id).first()
+
+            if not estate:
+                return Response(
+                    {"response": "Warning", "message": "Estate address not found"},
+                    status=200,
+                )
+
+            estate.status = new_status
+            session.commit()
+            session.refresh(estate)
+
+            return Response(
+                {"response": "Success", "message": f"Estate address status updated to {new_status}"},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+
+class DeleteEstateAddress(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            estate_id = request.data.get("id")
+
+            if not estate_id:
+                return Response(
+                    {"response": "Error", "message": "Estate address 'id' is required"},
+                    status=400,
+                )
+
+            estate = session.query(EstateAddressSA).filter(
+                EstateAddressSA.id == estate_id,
+                EstateAddressSA.status != "Deleted"
+            ).first()
+
+            if not estate:
+                return Response(
+                    {"response": "Warning", "message": "Estate address not found or already deleted"},
+                    status=200,
+                )
+
+            estate.status = "Deleted"
+            session.commit()
+            session.refresh(estate)
+
+            return Response(
+                {"response": "Success", "message": "Estate address deleted successfully"},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            session.rollback()
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+class AddEditGalleryBox(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            box_id = data.get("id") 
+            title = data.get("title", "Gallery")
+            description = data.get("description")
+            status = data.get("status", "Active")
+            createdId = data.get("createdId", "system")
+            createddate = data.get("createddate", datetime.now().strftime("%Y-%m-%d"))
+
+            if not title:
+                return Response(
+                    {"response": "Error", "message": "Title is required"},
+                    status=400
+                )
+
+            # ---------- Edit ----------
+            if box_id:
+                gallery_box = session.query(GalleryBoxSA).filter(
+                    GalleryBoxSA.id == box_id,
+                    GalleryBoxSA.status != "Deleted"
+                ).first()
+
+                if not gallery_box:
+                    return Response(
+                        {"response": "Warning", "message": "Gallery box not found"},
+                        status=200
+                    )
+
+                gallery_box.title = title
+                gallery_box.description = description
+                gallery_box.status = status
+                gallery_box.createdId = createdId
+                gallery_box.createddate = createddate
+
+                session.commit()
+                session.refresh(gallery_box)
+
+                return Response(
+                    {"response": "Success", "message": "Gallery box updated successfully"},
+                    status=200
+                )
+
+            # ---------- Add ----------
+            new_box = GalleryBoxSA(
+                title=title,
+                description=description,
+                status=status,
+                createdId=createdId,
+                createddate=createddate
+            )
+            session.add(new_box)
+            session.commit()
+            session.refresh(new_box)
+
+            return Response(
+                {"response": "Success", "message": "Gallery box added successfully", "id": new_box.id},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class GetGalleryBox(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            boxes = session.query(GalleryBoxSA).filter(
+                GalleryBoxSA.status != "Deleted"
+            ).order_by(GalleryBoxSA.id.desc()).all()
+
+            if not boxes:
+                return Response(
+                    {"response": "Warning", "message": "No gallery boxes found", "data": []},
+                    status=200
+                )
+
+            data = [
+                {
+                    "id": b.id,
+                    "title": b.title,
+                    "description": b.description,
+                    "status": b.status,
+                    "createdId": b.createdId,
+                    "createddate": b.createddate,
+                }
+                for b in boxes
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class Get_ActiveGalleryBox(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            boxes = session.query(GalleryBoxSA).filter(
+                GalleryBoxSA.status == "Active"
+            ).order_by(GalleryBoxSA.id.desc()).all()
+
+            if not boxes:
+                return Response(
+                    {"response": "Warning", "message": "No gallery boxes found", "count": 0, "data": []},
+                    status=200
+                )
+
+            data = [
+                {
+                    "id": b.id,
+                    "title": b.title,
+                    "description": b.description,
+                    "status": b.status,
+                    "createdId": b.createdId,
+                    "createddate": b.createddate,
+                }
+                for b in boxes
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class GetGalleryBoxByID(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            box_id = request.data.get("id")
+
+            if not box_id:
+                return Response({"response": "Warning", "message": "Gallery box 'id' is required"}, status=400)
+
+            box = session.query(GalleryBoxSA).filter(
+                GalleryBoxSA.id == box_id,
+                GalleryBoxSA.status != "Deleted"
+            ).first()
+
+            if not box:
+                return Response({"response": "Warning", "message": "Gallery box not found"}, status=404)
+
+            data = {
+                "id": box.id,
+                "title": box.title,
+                "description": box.description,
+                "status": box.status,
+                "createdId": box.createdId,
+                "createddate": box.createddate,
+            }
+
+            return Response({"response": "Success", "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class UpdateGalleryBoxStatus(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            box_id = request.data.get("id")
+            new_status = request.data.get("status")
+
+            if not box_id or not new_status:
+                return Response({"response": "Error", "message": "'id' and 'status' are required"}, status=400)
+
+            box = session.query(GalleryBoxSA).filter(GalleryBoxSA.id == box_id).first()
+
+            if not box:
+                return Response({"response": "Error", "message": "Gallery box not found"}, status=404)
+
+            box.status = new_status
+            session.commit()
+            session.refresh(box)
+
+            return Response(
+                {"response": "Success", "message": f"Gallery box status updated to {new_status}"},
+                status=200
+            )
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class DeleteGalleryBox(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            box_id = request.data.get("id")
+
+            if not box_id:
+                return Response({"response": "Error", "message": "'id' is required"}, status=400)
+
+            box = session.query(GalleryBoxSA).filter(
+                GalleryBoxSA.id == box_id,
+                GalleryBoxSA.status != "Deleted"
+            ).first()
+
+            if not box:
+                return Response(
+                    {"response": "Error", "message": "Gallery box not found or already deleted"},
+                    status=404
+                )
+
+            box.status = "Deleted"
+            session.commit()
+            session.refresh(box)
+
+            return Response({"response": "Success", "message": "Gallery box deleted successfully"}, status=200)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+
+class AddEditAboutPageBox(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            box_id = data.get("id")  # for edit
+            title = data.get("title")
+            description = data.get("description")
+            status = data.get("status", "Active")
+            createdId = data.get("createdId", "system")
+            createddate = data.get("createddate", datetime.now().strftime("%Y-%m-%d"))
+
+            if not title:
+                return Response({"response": "Error", "message": "Title is required"}, status=400)
+
+            # ---------- Edit ----------
+            if box_id:
+                box = session.query(AboutPageBoxSA).filter(
+                    AboutPageBoxSA.id == box_id,
+                    AboutPageBoxSA.status != "Deleted"
+                ).first()
+
+                if not box:
+                    return Response({"response": "Error", "message": "About page box not found"}, status=404)
+
+                box.title = title
+                box.description = description
+                box.status = status
+                box.createdId = createdId
+                box.createddate = createddate
+
+                session.commit()
+                session.refresh(box)
+
+                return Response({"response": "Success", "message": "About page box updated successfully"}, status=200)
+
+            # ---------- Add ----------
+            new_box = AboutPageBoxSA(
+                title=title,
+                description=description,
+                status=status,
+                createdId=createdId,
+                createddate=createddate
+            )
+            session.add(new_box)
+            session.commit()
+            session.refresh(new_box)
+
+            return Response({"response": "Success", "message": "About page box added successfully", "id": new_box.id}, status=200)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class GetAboutPageBox(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            boxes = session.query(AboutPageBoxSA).filter(
+                AboutPageBoxSA.status != "Deleted"
+            ).order_by(AboutPageBoxSA.id.desc()).all()
+
+            if not boxes:
+                return Response({"response": "Warning", "message": "No about page boxes found", "count": 0, "data": []}, status=200)
+
+            data = [
+                {
+                    "id": b.id,
+                    "title": b.title,
+                    "description": b.description,
+                    "status": b.status,
+                    "createdId": b.createdId,
+                    "createddate": b.createddate,
+                }
+                for b in boxes
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class Get_ActiveAboutPageBox(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            boxes = session.query(AboutPageBoxSA).filter(
+                AboutPageBoxSA.status == "Active"
+            ).order_by(AboutPageBoxSA.id.desc()).all()
+
+            if not boxes:
+                return Response({"response": "Warning", "message": "No about page boxes found", "count": 0, "data": []}, status=200)
+
+            data = [
+                {
+                    "id": b.id,
+                    "title": b.title,
+                    "description": b.description,
+                    "status": b.status,
+                    "createdId": b.createdId,
+                    "createddate": b.createddate,
+                }
+                for b in boxes
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class GetAboutPageBoxByID(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            box_id = request.data.get("id")
+
+            if not box_id:
+                return Response({"response": "Warning", "message": "About page box 'id' is required"}, status=400)
+
+            box = session.query(AboutPageBoxSA).filter(
+                AboutPageBoxSA.id == box_id,
+                AboutPageBoxSA.status != "Deleted"
+            ).first()
+
+            if not box:
+                return Response({"response": "Warning", "message": "About page box not found"}, status=404)
+
+            data = {
+                "id": box.id,
+                "title": box.title,
+                "description": box.description,
+                "status": box.status,
+                "createdId": box.createdId,
+                "createddate": box.createddate,
+            }
+
+            return Response({"response": "Success", "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class UpdateAboutPageBoxStatus(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            box_id = request.data.get("id")
+            new_status = request.data.get("status")
+
+            if not box_id or not new_status:
+                return Response({"response": "Error", "message": "'id' and 'status' are required"}, status=400)
+
+            box = session.query(AboutPageBoxSA).filter(AboutPageBoxSA.id == box_id).first()
+
+            if not box:
+                return Response({"response": "Error", "message": "About page box not found"}, status=404)
+
+            box.status = new_status
+            session.commit()
+            session.refresh(box)
+
+            return Response({"response": "Success", "message": f"About page box status updated to {new_status}"}, status=200)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+class DeleteAboutPageBox(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            box_id = request.data.get("id")
+
+            if not box_id:
+                return Response({"response": "Error", "message": "'id' is required"}, status=400)
+
+            box = session.query(AboutPageBoxSA).filter(
+                AboutPageBoxSA.id == box_id,
+                AboutPageBoxSA.status != "Deleted"
+            ).first()
+
+            if not box:
+                return Response({"response": "Error", "message": "About page box not found or already deleted"}, status=404)
+
+            box.status = "Deleted"
+            session.commit()
+            session.refresh(box)
+
+            return Response({"response": "Success", "message": "About page box deleted successfully"}, status=200)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            session.rollback()
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
         finally:
             session.close()
