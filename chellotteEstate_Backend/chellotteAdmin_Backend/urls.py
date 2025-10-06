@@ -70,12 +70,47 @@ urlpatterns = [
     path("api/admin/UpdateGalleryBoxStatus/",views.UpdateGalleryBoxStatus.as_view(),name="UpdateGalleryBoxStatus"), 
     path("api/admin/DeleteGalleryBox/",views.DeleteGalleryBox.as_view(),name="DeleteGalleryBox"), 
 
-#ABOUT PAGE BOX
-    # path('api/admin/AddEditAboutPageBox/', views.AddEditAboutPageBox.as_view(), name='AddEditAboutPageBox'),
-    # path("api/admin/GetAboutPageBox/",views.GetAboutPageBox.as_view(),name="GetAboutPageBox"), 
-    # path("api/admin/Get_ActiveAboutPageBox/",views.Get_ActiveAboutPageBox.as_view(),name="Get_ActiveAboutPageBox"), 
-    # path("api/admin/GetAboutPageBoxByID/",views.GetAboutPageBoxByID.as_view(),name="GetAboutPageBoxByID"), 
-    # path("api/admin/UpdateAboutPageBoxStatus/",views.UpdateAboutPageBoxStatus.as_view(),name="UpdateAboutPageBoxStatus"), 
-    # path("api/admin/DeleteAboutPageBox/",views.DeleteAboutPageBox.as_view(),name="DeleteAboutPageBox"), 
+#PRODUCT PAGE BOX
+    path('api/admin/AddEditProductPageBox/', views.AddEditProductPageBox.as_view(), name='AddEditProductPageBox'),
+    path("api/admin/GetProductPageBox/",views.GetProductPageBox.as_view(),name="GetProductPageBox"), 
+    path("api/admin/Get_ActiveProductPageBox/",views.Get_ActiveProductPageBox.as_view(),name="Get_ActiveProductPageBox"), 
+    path("api/admin/GetProductPageBoxByID/",views.GetProductPageBoxByID.as_view(),name="GetProductPageBoxByID"), 
+    path("api/admin/UpdateProductPageBoxStatus/",views.UpdateProductPageBoxStatus.as_view(),name="UpdateProductPageBoxStatus"), 
+    path("api/admin/DeleteProductPageBox/",views.DeleteProductPageBox.as_view(),name="DeleteProductPageBox"), 
+
+#PRODUCT 
+    path('api/admin/AddEditProduct/', views.AddEditProduct.as_view(), name='AddEditProduct'),
+    path("api/admin/GetProducts/",views.GetProducts.as_view(),name="GetProducts"), 
+    path("api/admin/Get_ActiveProducts/",views.Get_ActiveProducts.as_view(),name="Get_ActiveProducts"), 
+    path("api/admin/GetProductByID/",views.GetProductByID.as_view(),name="GetProductByID"), 
+    path("api/admin/UpdateProductStatus/",views.UpdateProductStatus.as_view(),name="UpdateProductStatus"), 
+    path("api/admin/DeleteProduct/",views.DeleteProduct.as_view(),name="DeleteProduct"), 
+
+#TESTIMONIALS 
+    path('api/admin/AddEditTestimonial/', views.AddEditTestimonial.as_view(), name='AddEditTestimonial'),
+    path("api/admin/GetTestimonials/",views.GetTestimonials.as_view(),name="GetTestimonials"), 
+    path("api/admin/Get_ActiveTestimonials/",views.Get_ActiveTestimonials.as_view(),name="Get_ActiveTestimonials"), 
+    path("api/admin/GetTestimonialByID/",views.GetTestimonialByID.as_view(),name="GetTestimonialByID"), 
+    path("api/admin/UpdateTestimonialStatus/",views.UpdateTestimonialStatus.as_view(),name="UpdateTestimonialStatus"), 
+    path("api/admin/DeleteTestimonial/",views.DeleteTestimonial.as_view(),name="DeleteTestimonial"), 
+
+#HOME TOURISM CARDS 
+    path('api/admin/AddEditTourismCard/', views.AddEditTourismCard.as_view(), name='AddEditTourismCard'),
+    path("api/admin/GetTourismCards/",views.GetTourismCards.as_view(),name="GetTourismCards"), 
+    path("api/admin/Get_ActiveTourismCards/",views.Get_ActiveTourismCards.as_view(),name="Get_ActiveTourismCards"), 
+    path("api/admin/GetTourismCardByID/",views.GetTourismCardByID.as_view(),name="GetTourismCardByID"), 
+    path("api/admin/UpdateTourismCardStatus/",views.UpdateTourismCardStatus.as_view(),name="UpdateTourismCardStatus"), 
+    path("api/admin/DeleteTourismCard/",views.DeleteTourismCard.as_view(),name="DeleteTourismCard"), 
+
+#HOME PLANTATIONS 
+    path('api/admin/AddEditPlantation/', views.AddEditPlantation.as_view(), name='AddEditPlantation'),
+    path("api/admin/GetHomePlantations/",views.GetHomePlantations.as_view(),name="GetHomePlantations"), 
+    path("api/admin/Get_ActiveHomePlantations/",views.Get_ActiveHomePlantations.as_view(),name="Get_ActiveHomePlantations"), 
+    path("api/admin/GetHomePlantationByID/",views.GetHomePlantationByID.as_view(),name="GetHomePlantationByID"), 
+    path("api/admin/UpdateHomePlantationStatus/",views.UpdateHomePlantationStatus.as_view(),name="UpdateHomePlantationStatus"), 
+    path("api/admin/DeleteHomePlantation/",views.DeleteHomePlantation.as_view(),name="DeleteHomePlantation"), 
+
+#ENQUIRY
+    path('api/admin/getAll_enquiry/', views.GetEnquiry.as_view(), name='getAll_enquiry'),
 
 ]

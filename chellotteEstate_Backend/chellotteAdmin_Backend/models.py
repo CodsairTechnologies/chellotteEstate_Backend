@@ -1,10 +1,10 @@
 from django.db import models
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text, Date
 from sqlalchemy.ext.declarative import declarative_base
 from django.contrib.auth.hashers import make_password,check_password
 from sqlalchemy.dialects.mysql import INTEGER, LONGTEXT
 # from datetime import datetime
-from sqlalchemy import Column, DateTime,Integer,String
+from sqlalchemy import Column, DateTime,Integer,String, Numeric, Boolean
 # from django.contrib.postgres.fields import JSONField
 # from django.utils import timezone
 # from sqlalchemy.orm import relationship
@@ -232,21 +232,23 @@ class GallerySA(Base):
 
 class AboutPage(models.Model):
     box_description = models.TextField(blank=True, null=True)
+    box_title = models.TextField(blank=True, null=True)
     # Section 1
     sec1_heading = models.CharField(max_length=255)
     sec1_subheading = models.TextField(blank=True, null=True)
     sec1_image = models.ImageField(upload_to="about/section1/", blank=True, null=True)
-
+    sec1_description = models.TextField(blank=True, null=True)
     # Section 2
     sec2_heading = models.CharField(max_length=255)
     sec2_subheading = models.TextField(blank=True, null=True)
     sec2_image = models.ImageField(upload_to="about/section2/", blank=True, null=True)
-
+    sec2_description = models.TextField(blank=True, null=True)
     # Section 3
     sec3_heading = models.CharField(max_length=255)
     sec3_subheading = models.TextField(blank=True, null=True)
     sec3_image = models.ImageField(upload_to="about/section3/", blank=True, null=True)
-
+    sec3_description = models.TextField(blank=True, null=True)
+    
     years_of_experience = models.IntegerField()
     status = models.CharField(max_length=250, null=True)
     createdId = models.CharField(max_length=250, null=True)
@@ -260,19 +262,23 @@ class AboutPageSA(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     box_description = Column(String(500), nullable=False)
+    box_title = Column(String(500), nullable=False)
+    
     # Section 1
     sec1_heading = Column(String(255), nullable=False)
     sec1_subheading = Column(String(500), nullable=True)
+    sec1_description = Column(String(500), nullable=True)
     sec1_image = Column(String(500), nullable=True)  
 
     # Section 2
     sec2_heading = Column(String(255), nullable=False)
     sec2_subheading = Column(String(500), nullable=True)
+    sec2_description = Column(String(500), nullable=True)
     sec2_image = Column(String(500), nullable=True)
-
     # Section 3
     sec3_heading = Column(String(255), nullable=False)
     sec3_subheading = Column(String(500), nullable=True)
+    sec3_description = Column(String(500), nullable=True)
     sec3_image = Column(String(500), nullable=True)
 
     years_of_experience = Column(Integer, nullable=False)
@@ -330,7 +336,7 @@ class GalleryBoxSA(Base):
     createdId = Column(String(250), nullable=True)
     createddate = Column(String(250), nullable=True)
 
-class AboutPageBox(models.Model):
+class ProductPageBox(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=50, default="Active")
@@ -338,10 +344,10 @@ class AboutPageBox(models.Model):
     createddate = models.CharField(max_length=250, null=True)
 
     class Meta:
-        db_table = "about_page_box"
+        db_table = "product_page_box"
 
-class AboutPageBoxSA(Base):
-    __tablename__ = "about_page_box"
+class ProductPageBoxSA(Base):
+    __tablename__ = "product_page_box"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String(255), nullable=False)
@@ -349,3 +355,162 @@ class AboutPageBoxSA(Base):
     status = Column(String(50), nullable=True, default="Active")
     createdId = Column(String(250), nullable=True)
     createddate = Column(String(250), nullable=True)
+
+class Product(models.Model):
+    productID = models.CharField(max_length=255)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    cover_image = models.ImageField(upload_to="products/covers/", blank=True, null=True)
+    background_image = models.ImageField(upload_to="products/backgrounds/", blank=True, null=True)
+    card_icon = models.ImageField(upload_to="products/icons/", blank=True, null=True)
+
+    is_featured = models.BooleanField(default=False)
+    availability = models.CharField(max_length=100, default="In Stock")   # new
+    brand_name = models.CharField(max_length=255, blank=True, null=True) # new
+
+    status = models.CharField(max_length=50, default="Active")
+    createdId = models.CharField(max_length=250, null=True)
+    createddate = models.CharField(max_length=250, null=True)
+
+    class Meta:
+        db_table = "product_tbl"
+
+
+class ProductSA(Base):
+    __tablename__ = "product_tbl"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    productID = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    price = Column(Numeric(10, 2), nullable=False, default=0.00)
+
+    cover_image = Column(String(500), nullable=True)
+    background_image = Column(String(500), nullable=True)
+    card_icon = Column(String(500), nullable=True)
+
+    is_featured = Column(Boolean, default=False)
+    availability = Column(String(100), nullable=True, default="In Stock")  
+    brand_name = Column(String(255), nullable=True)                      
+
+    status = Column(String(50), nullable=True, default="Active")
+    createdId = Column(String(250), nullable=True)
+    createddate = Column(String(250), nullable=True)
+
+class TestimonialSA(Base):
+    __tablename__ = "testimonials_tbl"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(250), nullable=True)
+    testimony = Column(Text, nullable=True)
+    profile_image = Column(String(500), nullable=True)  
+    status = Column(String(50), default="Active")
+    createdId = Column(Integer, nullable=True)
+    createddate = Column(Date, nullable=True)
+
+class Testimonial(models.Model):
+    STATUS_CHOICES = (
+        ("Active", "Active"),
+        ("Inactive", "Inactive"),
+        ("Deleted", "Deleted"),
+    )
+
+    name = models.CharField(max_length=250, blank=True, null=True)
+    testimony = models.TextField(blank=True, null=True)
+    profile_image = models.ImageField(upload_to="uploads/testimonials/", blank=True, null=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default="Active")
+    createdId = models.IntegerField(blank=True, null=True)
+    createddate = models.DateField(auto_now_add=True)
+
+    class Meta:
+        db_table = "testimonials_tbl"
+
+class HomePlantation(models.Model):
+    section_title = models.CharField(max_length=255, blank=True, null=True)  # e.g. "Shade-Grown Coffee & Orthodox Tea from Wayanad"
+    title = models.CharField(max_length=255)  # e.g. "Shade-Grown Coffee"
+    description = models.TextField(blank=True, null=True)
+    image1 = models.ImageField(upload_to="home_plantation/", blank=True, null=True)
+    image2 = models.ImageField(upload_to="home_plantation/", blank=True, null=True)
+    image3 = models.ImageField(upload_to="home_plantation/", blank=True, null=True)
+    order = models.IntegerField(blank=True, null=True)  # to manage display order
+    status = models.CharField(max_length=50, default="Active")
+    createdId = models.CharField(max_length=250, null=True)
+    createddate = models.CharField(max_length=250, null=True)
+
+    class Meta:
+        db_table = "home_plantation"
+        ordering = ['order']
+
+    def __str__(self):
+        return self.title
+    
+class HomePlantationSA(Base):
+    __tablename__ = "home_plantation"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    section_title = Column(String(255), nullable=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    image1 = Column(String(500), nullable=True)
+    image2 = Column(String(500), nullable=True)
+    image3 = Column(String(500), nullable=True)
+    order = Column(Integer, nullable=True)
+    status = Column(String(50), default="Active")
+    createdId = Column(String(250), nullable=True)
+    createddate = Column(String(250), nullable=True)
+
+
+class TourismCard(models.Model):
+    card_title = models.CharField(max_length=255, blank=True, null=True)
+    card_description = models.TextField(blank=True, null=True)
+    card_image = models.ImageField(upload_to="tourism/cards/", blank=True, null=True)
+    status = models.CharField(max_length=50, default="Active")
+    createdId = models.CharField(max_length=250, null=True)
+    createddate = models.DateField(auto_now_add=True)
+
+    class Meta:
+        db_table = "tourism_card"
+
+    def __str__(self):
+        return self.card_title or "Tourism Card"
+
+class TourismCardSA(Base):
+    __tablename__ = "tourism_card"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    card_title = Column(String(255), nullable=True)
+    card_description = Column(Text, nullable=True)
+    card_image = Column(String(500), nullable=True)  # store file path
+    status = Column(String(50), nullable=True, default="Active")
+    createdId = Column(String(250), nullable=True)
+    createddate = Column(Date, nullable=True)
+
+    def __repr__(self):
+        return f"<TourismCardSA(id={self.id}, title={self.card_title})>"
+
+#Customer Enquiry form
+class CustomerEnquiry(models.Model):
+    name = models.CharField(max_length=200, null=False)
+    email = models.EmailField(max_length=200, null=False)
+    phoneNumber = models.CharField(max_length=200,null=True) 
+    # contact_reason = models.CharField(max_length=200, null=True)
+    message = models.TextField(null=False)
+    created_date = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=50, null=True, blank=True)
+    
+    class Meta:
+        db_table = 'customer_enquiry_tbl'
+
+class CustomerEnquiry(Base):
+    __tablename__ = 'customer_enquiry_tbl'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), nullable=False)
+    email = Column(String(200), nullable=False)
+    phoneNumber = Column(String(50), nullable=True)
+    # contact_reason = Column(String(200), nullable=True)
+    message = Column(LONGTEXT, nullable=False)
+    created_date = Column(DateTime)
+    status = Column(String(50))

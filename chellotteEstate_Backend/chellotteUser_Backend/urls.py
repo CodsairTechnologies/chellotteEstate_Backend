@@ -16,6 +16,12 @@ urlpatterns = [
 #GET HOME GALLERY
     path("api/user/home_GetGallery/",views.home_GetGallery.as_view(),name="home_GetGallery"), 
 
+#TESTIMONIALS 
+    path('api/user/Get_ActiveTestimonials/', views.Get_Testimonials.as_view(), name='Get_ActiveTestimonials'),
+
+#FEATURED PRODUCTS 
+    path('api/user/GetFeaturedProducts/', views.GetFeaturedProducts.as_view(), name='GetFeaturedProducts'),
+
 #ESTATE ADDRESS
     path("api/user/home_GetEstateAddress/",views.GetEstateAddress.as_view(),name="Active_GetEstateAddress"), 
 
@@ -27,5 +33,19 @@ urlpatterns = [
 #ABOUT PAGE
     path("api/user/GetAboutPage/",views.GetAboutPage.as_view(),name="GetAboutPage"), 
 
+##PRODUCT PAGE 
+    path('api/user/Get_Products/', views.Get_Products.as_view(), name='Get_Products'),
+    path('api/user/FilterProducts/', views.FilterProducts.as_view(), name='FilterProducts'),
+    path('api/user/SearchProducts/', views.SearchProducts.as_view(), name='SearchProducts'),
+    path('api/user/Get_ProductPageBox/', views.Get_ProductPageBox.as_view(), name='Get_ProductPageBox'),
+
+#ENQUIRY
+    path('api/user/add_contactenquiry/', views.AddCustomerEnquiry.as_view(), name='addcontactenquiry'),
+
+#HOME PLANTATIONS 
+    path("api/user/GetHomePlantations/",views.GetHomePlantations.as_view(),name="GetHomePlantations"), 
+
+#HOME TOURISM CARDS 
+    path("api/user/GetTourismCards/",views.GetTourismCards.as_view(),name="GetTourismCards"), 
 
 ]

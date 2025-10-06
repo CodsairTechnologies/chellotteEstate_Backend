@@ -19,7 +19,7 @@ import hashlib
 # from mankind_admin.models import Category,BannerSliders,AuthToken,Tax,ShippingCharge,ProductsImages,Products,PopularProduct,OutletSA,metalTypesSA,CareerSA,JobApplicationSA
 import environ
 import uuid
-from rest_framework.permissions import IsAuthenticated
+# from rest_framework.permissions import IsAuthenticated
 # from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated,AllowAny
@@ -108,6 +108,7 @@ import math
 env = environ.Env()
 environ.Env.read_env()
 
+#HOME BANNER
 class UserGetActiveBanner(APIView):
     permission_classes = [AllowAny]
 
@@ -155,6 +156,7 @@ class UserGetActiveBanner(APIView):
         finally:
             session.close()
 
+#HOME TIMELINE WITH ABOUT
 class User_GetEstateWithTimeline(APIView):
     permission_classes = [AllowAny]
 
@@ -229,59 +231,7 @@ class User_GetEstateWithTimeline(APIView):
         finally:
             session.close()
 
-
-class User_GalleryPage(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        session = dbsession.Session()
-        try:
-            galleries = (
-                session.query(GallerySA)
-                .filter(GallerySA.status == "Active")
-                .order_by(GallerySA.id.desc())
-                .all()
-            )
-            if not galleries:  
-                return Response(
-                    {
-                        "response": "Warning",
-                        "message": "No gallery data found",
-                        "count": 0,
-                        "data": [],
-                    },
-                    status=200,
-                )
-            data = [
-                {
-                    "id": g.id,
-                    "title": g.title,
-                    "image": g.image,
-                    "status": g.status,
-                    "createdId": g.createdId,
-                    "createddate": g.createddate,
-                }
-                for g in galleries
-            ]
-
-            return Response(
-                {"response": "Success", "count": len(data), "data": data},
-                status=200,
-            )
-
-        except SQLAlchemyError as e:
-            return Response(
-                {"response": "Error", "message": "Database error", "errors": str(e)},
-                status=500,
-            )
-        except Exception as e:
-            return Response(
-                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
-                status=500,
-            )
-        finally:
-            session.close()
-
+#HOME GALLERY
 class home_GetGallery(APIView):
     permission_classes = [AllowAny]
 
@@ -293,7 +243,7 @@ class home_GetGallery(APIView):
                 session.query(GallerySA)
                 .filter(GallerySA.status == "Active")
                 .order_by(GallerySA.id.desc())
-                .limit(6)
+                .limit(8)
                 .all()
             )
 
@@ -338,58 +288,7 @@ class home_GetGallery(APIView):
         finally:
             session.close()
 
-class FilterGalleryByName(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        session = dbsession.Session()
-        try:
-            name = request.query_params.get("name")
-
-            if not name:
-                return Response(
-                    {"response": "Error", "message": "Gallery name is required"},
-                    status=400,
-                )
-
-            galleries = session.query(GallerySA).filter(
-                GallerySA.title.ilike(f"%{name}%"),
-                GallerySA.status != "Deleted"
-            ).all()
-
-            if not galleries:
-                return Response(
-                    {"response": "Warning", "message": "No galleries found with that name"},
-                    status=200,
-                )
-
-            data = [
-                {
-                    "galleryId": g.id,
-                    "title": g.title,
-                    "image": g.image,
-                    "status": g.status,
-                }
-                for g in galleries
-            ]
-
-            return Response({"response": "Success", "data": data}, status=200)
-
-        except SQLAlchemyError as e:
-            return Response(
-                {"response": "Error", "message": "Database error", "errors": str(e)},
-                status=500,
-            )
-
-        except Exception as e:
-            return Response(
-                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
-                status=500,
-            )
-
-        finally:
-            session.close()
-
+#HOME_ESTATE ADRRESS
 class GetEstateAddress(APIView):
     permission_classes = [AllowAny]
 
@@ -445,6 +344,216 @@ class GetEstateAddress(APIView):
         finally:
             session.close()
 
+#HOME-FEATURED PRODUCTS
+from sqlalchemy.sql.expression import func
+
+class GetFeaturedProducts(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            products = (
+                session.query(ProductSA)
+                .filter(ProductSA.status == "Active", ProductSA.is_featured == True)
+                .order_by(func.rand())  
+                .limit(3)                
+                .all()
+            )
+
+            if not products:
+                return Response(
+                    {
+                        "response": "Warning",
+                        "message": "No featured products found",
+                        "count": 0,
+                        "data": [],
+                    },
+                    status=200,
+                )
+
+            data = [
+                {
+                    "id": p.id,
+                    "title": p.title,
+                    "description": p.description,
+                    "price": p.price,
+                    "availability": p.availability,
+                    "brand_name": p.brand_name,
+                    "cover_image": p.cover_image,
+                    "background_image": p.background_image,
+                    "card_icon": p.card_icon,
+                    "is_featured": p.is_featured,
+                    "status": p.status,
+                    "createdId": p.createdId,
+                    "createddate": str(p.createddate),
+                }
+                for p in products
+            ]
+
+            return Response(
+                {"response": "Success", "count": len(data), "data": data},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+#HOME-TESTIMONIAL
+class Get_Testimonials(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            testimonials = session.query(TestimonialSA).filter(
+                TestimonialSA.status == "Active"
+            ).order_by(TestimonialSA.id.desc()).all()
+
+            if not testimonials:
+                return Response({"response": "Warning", "message": "No testimonials found", "count": 0, "data": []}, status=200)
+
+            data = [
+                {
+                    "id": t.id,
+                    "name": t.name,
+                    "testimony": t.testimony,
+                    "profile_image": t.profile_image,
+                    "status": t.status,
+                    "createdId": t.createdId,
+                    "createddate": str(t.createddate)
+                }
+                for t in testimonials
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+
+        finally:
+            session.close()
+
+#GALLERY PAGE
+class User_GalleryPage(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            galleries = (
+                session.query(GallerySA)
+                .filter(GallerySA.status == "Active")
+                .order_by(GallerySA.id.desc())
+                .all()
+            )
+            if not galleries:  
+                return Response(
+                    {
+                        "response": "Warning",
+                        "message": "No gallery data found",
+                        "count": 0,
+                        "data": [],
+                    },
+                    status=200,
+                )
+            data = [
+                {
+                    "id": g.id,
+                    "title": g.title,
+                    "image": g.image,
+                    "status": g.status,
+                    "createdId": g.createdId,
+                    "createddate": g.createddate,
+                }
+                for g in galleries
+            ]
+
+            return Response(
+                {"response": "Success", "count": len(data), "data": data},
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+class FilterGalleryByName(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # name = request..get("name")
+            data = request.data
+
+            name = data.get('name')
+            if not name:
+                return Response(
+                    {"response": "Warning", "message": "Gallery name is required"},
+                    status=200,
+                )
+
+            galleries = session.query(GallerySA).filter(
+                GallerySA.title.ilike(f"%{name}%"),
+                GallerySA.status != "Deleted"
+            ).all()
+
+            if not galleries:
+                return Response(
+                    {"response": "Warning", "message": "No galleries found with that name"},
+                    status=200,
+                )
+
+            data = [
+                {
+                    "galleryId": g.id,
+                    "title": g.title,
+                    "image": g.image,
+                    "status": g.status,
+                }
+                for g in galleries
+            ]
+
+            return Response({"response": "Success", "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+#GET GALLERY BOX
 class GalleryBox(APIView):
     permission_classes = [AllowAny]
 
@@ -482,6 +591,7 @@ class GalleryBox(APIView):
         finally:
             session.close()
 
+#ABOUT PAGE
 class GetAboutPage(APIView):
     permission_classes = [AllowAny]
 
@@ -509,20 +619,23 @@ class GetAboutPage(APIView):
             for a in about_list:
                 data.append({
                     "id": a.id,
-                    "box_title": "About Us",
                     "box_description":a.box_description,
+                    "box_title":a.box_title,
                     "years_of_experience": a.years_of_experience,
                     "status": a.status,
                     "createdId": a.createdId,
                     "createddate": a.createddate,
                     "sec1_heading": a.sec1_heading,
                     "sec1_subheading": a.sec1_subheading,
+                    "sec1_description": a.sec1_description,
                     "sec1_image": a.sec1_image,
                     "sec2_heading": a.sec2_heading,
                     "sec2_subheading": a.sec2_subheading,
+                    "sec2_description": a.sec2_description,
                     "sec2_image": a.sec2_image,
                     "sec3_heading": a.sec3_heading,
                     "sec3_subheading": a.sec3_subheading,
+                    "sec3_description": a.sec3_description,
                     "sec3_image": a.sec3_image,
                 })
 
@@ -543,5 +656,495 @@ class GetAboutPage(APIView):
                 status=500
             )
 
+        finally:
+            session.close()
+
+#PRODUCT PAGE
+class Get_Products(APIView):
+    permission_classes = [AllowAny]
+
+    def build_image_url(self, path):
+        """Build a full image URL using MEDIA_URL."""
+        if not path:
+            return None
+        return os.path.join(settings.MEDIA_URL, path).replace("\\", "/")
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            products = (
+                session.query(ProductSA)
+                .filter(ProductSA.status == "Active")
+                .order_by(ProductSA.id.desc())
+                .all()
+            )
+
+            if not products:
+                return Response(
+                    {"response": "Warning", "message": "No products found", "count": 0, "data": []},
+                    status=200
+                )
+
+            data = []
+            for p in products:
+                data.append({
+                    "id": p.id,
+                    "productID": p.productID,
+                    "title": p.title,
+                    "description": p.description,
+                    "price": str(p.price) if p.price else None,
+                    "cover_image": self.build_image_url(p.cover_image),
+                    "background_image": self.build_image_url(p.background_image),
+                    "card_icon": self.build_image_url(p.card_icon),
+                    "is_featured": p.is_featured,
+                    "availability": p.availability,
+                    "brand_name": p.brand_name,
+                    "status": p.status,
+                    "createdId": p.createdId,
+                    "createddate": p.createddate,
+                })
+
+            return Response({
+                "response": "Success",
+                "count": len(data),
+                "data": data
+            }, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({
+                "response": "Error",
+                "message": "Database error",
+                "errors": str(e)
+            }, status=500)
+
+        except Exception as e:
+            return Response({
+                "response": "Error",
+                "message": "Unexpected error",
+                "errors": str(e)
+            }, status=500)
+
+        finally:
+            session.close()
+
+class FilterProducts(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            availability = request.data.get("availability")
+            price_order = request.data.get("price_order")  # "low_to_high" or "high_to_low"
+
+            query = session.query(ProductSA).filter(ProductSA.status == "Active")
+
+            # Apply availability filter if provided
+            if availability:
+                query = query.filter(ProductSA.availability == availability)
+
+            # Apply price ordering if provided
+            if price_order == "low_to_high":
+                query = query.order_by(ProductSA.price.asc())
+            elif price_order == "high_to_low":
+                query = query.order_by(ProductSA.price.desc())
+            else:
+                query = query.order_by(ProductSA.id.desc())  # default ordering
+
+            products = query.all()
+
+            if not products:
+                return Response(
+                    {
+                        "response": "Warning",
+                        "message": "No products found with given filters",
+                        "count": 0,
+                        "data": [],
+                    },
+                    status=200,
+                )
+
+            data = [
+                {
+                    "id": p.id,
+                    "title": p.title,
+                    "description": p.description,
+                    "price": p.price,
+                    "availability": p.availability,
+                    "brand_name": p.brand_name,
+                    "cover_image": p.cover_image,
+                    "background_image": p.background_image,
+                    "card_icon": p.card_icon,
+                    "is_featured": p.is_featured,
+                    "status": p.status,
+                    "createdId": p.createdId,
+                    "createddate": str(p.createddate),
+                }
+                for p in products
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+
+        finally:
+            session.close()
+
+from sqlalchemy import or_
+
+class SearchProducts(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            query_text = request.data.get("query")
+
+            if not query_text:
+                return Response(
+                    {"response": "Warning", "message": "Search query is required"},
+                    status=200,
+                )
+
+            products = (
+                session.query(ProductSA)
+                .filter(
+                    ProductSA.status == "Active",
+                    or_(
+                        ProductSA.title.ilike(f"%{query_text}%"),
+                        ProductSA.brand_name.ilike(f"%{query_text}%"),
+                        ProductSA.description.ilike(f"%{query_text}%"),
+                    )
+                )
+                .order_by(ProductSA.id.desc())
+                .all()
+            )
+
+            if not products:
+                return Response(
+                    {"response": "Warning", "message": "No products found", "count": 0, "data": []},
+                    status=200,
+                )
+
+            data = [
+                {
+                    "id": p.id,
+                    "title": p.title,
+                    "description": p.description,
+                    "price": p.price,
+                    "availability": p.availability,
+                    "brand_name": p.brand_name,
+                    "cover_image": p.cover_image,
+                    "background_image": p.background_image,
+                    "card_icon": p.card_icon,
+                    "is_featured": p.is_featured,
+                    "status": p.status,
+                    "createdId": p.createdId,
+                    "createddate": str(p.createddate),
+                }
+                for p in products
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+
+        finally:
+            session.close()
+
+#PRODUCT BOX
+class Get_ProductPageBox(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            boxes = session.query(ProductPageBoxSA).filter(
+                ProductPageBoxSA.status == "Active"
+            ).order_by(ProductPageBoxSA.id.desc()).all()
+
+            if not boxes:
+                return Response({"response": "Warning", "message": "No data found", "count": 0, "data": []}, status=200)
+
+            data = [
+                {
+                    "id": b.id,
+                    "title": b.title,
+                    "description": b.description,
+                    "status": b.status,
+                    "createdId": b.createdId,
+                    "createddate": b.createddate,
+                }
+                for b in boxes
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+        finally:
+            session.close()
+
+#ADD ENQUIRY
+class AddCustomerEnquiry(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+
+            name = data.get('name')
+            email = data.get('email')
+            phoneNumber = data.get('phoneNumber')
+            message = data.get('message')
+
+            # #  Basic validation
+            # if not all([name, email, message,phoneNumber]):
+            #     return Response({
+            #         "response": "Error",
+            #         "message": "All fields (name, email, message,phone number) are required"
+            #     }, status=400)
+
+            #  Email format validation
+            # EMAIL_REGEX = r"[^@]+@[^@]+\.[^@]+"
+            # if not re.match(EMAIL_REGEX, email):
+            #     return Response({
+            #         "response": "Error",
+            #         "message": "Please enter a valid email address"
+            #     }, status=400)
+
+            # Save enquiry to database
+            enquiry = CustomerEnquiry(
+                name=name,
+                email=email,
+                message=message,
+                phoneNumber = phoneNumber,
+                status = "Active",
+                created_date=datetime.now()
+            )
+            session.add(enquiry)
+
+            session.commit()
+            return Response({
+                "response": "Success",
+                "message": "Enquiry submitted successfully"
+                # "message": "Enquiry submitted and notification sent successfully"
+            }, status=200)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "Error",
+                "message": "Database error",
+                "details": str(e)
+            }, status=500)
+
+        except Exception as e:
+            session.rollback()
+            return Response({
+                'response': 'Error',
+                'message': 'Unexpected error occurred',
+                'Error': str(e)
+            }, status=500)
+
+        finally:
+            session.close()
+
+# class AddCustomerEnquiry(APIView):
+#     permission_classes = [AllowAny]
+
+#     def post(self, request):
+#         session = dbsession.Session()
+#         try:
+#             data = request.data
+
+#             name = data.get('name')
+#             email = data.get('email')
+#             phoneNumber = data.get('phoneNumber')
+#             message = data.get('message')
+#             # --- Save enquiry to database ---
+#             enquiry = CustomerEnquiry(
+#                 name=name,
+#                 email=email,
+#                 message=message,
+#                 phoneNumber=phoneNumber,
+#                 status="Active",
+#                 created_date=datetime.now()
+#             )
+#             session.add(enquiry)
+#             session.commit()
+
+#             # --- Fetch active admin emails ---
+#             admin_emails = [
+#                 admin.emailId for admin in session.query(SuperAdminDtl)
+#                 .filter(SuperAdminDtl.status == "Active", SuperAdminDtl.emailId.isnot(None))
+#                 .all()
+#             ]
+
+#             # --- Send email notification ---
+#             if admin_emails:
+#                 try:
+#                     subject = f"📩 New Customer Enquiry from {name}"
+#                     email_message = f"""
+# Hello Admin,
+
+# You have received a new customer enquiry.
+
+# 👤 Name: {name}
+# 📧 Email: {email}
+# 📞 Phone: {phoneNumber}
+# 💬 Message:
+# {message}
+
+# Submitted on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+# Regards,
+# Your Website
+# """
+#                     send_mail(
+#                         subject,
+#                         email_message,
+#                         settings.DEFAULT_FROM_EMAIL,
+#                         admin_emails,
+#                         fail_silently=False,
+#                     )
+#                 except Exception as e:
+#                     # Email failure should not stop the API
+#                     print("Email send failed:", e)
+
+#             return Response({
+#                 "response": "Success",
+#                 "message": "Enquiry submitted successfully and notification sent to admin"
+#             }, status=200)
+
+#         except SQLAlchemyError as e:
+#             session.rollback()
+#             return Response({
+#                 "response": "Error",
+#                 "message": "Database error",
+#                 "details": str(e)
+#             }, status=500)
+
+#         except Exception as e:
+#             session.rollback()
+#             return Response({
+#                 'response': 'Error',
+#                 'message': 'Unexpected error occurred',
+#                 'Error': str(e)
+#             }, status=500)
+
+#         finally:
+#             session.close()
+
+class GetHomePlantations(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # Fetch all active highlights
+            highlights = (
+                session.query(HomePlantationSA)
+                .filter(HomePlantationSA.status == "Active")
+                .order_by(HomePlantationSA.order.asc())
+                .all()
+            )
+
+            if not highlights:
+                return Response(
+                    {"response": "Warning", "message": "No plantation found", "count": 0, "highlights": []},
+                    status=200
+                )
+
+            # Use the section title from the first record (since it’s shared)
+            section_title = highlights[0].section_title if highlights[0].section_title else None
+
+            data = [
+                {
+                    "id": h.id,
+                    "title": h.title,
+                    "description": h.description,
+                    "image1": h.image1,
+                    "image2": h.image2,
+                    "image3": h.image3,
+                    "order": h.order,
+                    "status": h.status,
+                }
+                for h in highlights
+            ]
+
+            return Response(
+                {
+                    "response": "Success",
+                    "section_title": section_title,
+                    "count": len(data),
+                    "Plantation": data,
+                },
+                status=200,
+            )
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
+        finally:
+            session.close()
+
+
+class GetTourismCards(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            # cards = session.query(TourismCardSA).filter(
+            #     TourismCardSA.status == "Active"
+            # ).order_by(TourismCardSA.id.asc()).limit(4).all()
+            cards = session.query(TourismCardSA).filter(
+                TourismCardSA.status == "Active"
+            ).order_by(TourismCardSA.id.asc()).order_by(func.rand()).limit(4).all()
+
+            if not cards:
+                return Response({"response": "Warning", "message": "No tourism cards found", "count": 0, "cards": []}, status=200)
+
+            data = [
+                {
+                    "id": c.id,
+                    "card_title": c.card_title,
+                    "card_description": c.card_description,
+                    "card_image": c.card_image,
+                    "status": c.status,
+                    "createdId": c.createdId,
+                    "createddate": str(c.createddate)
+                }
+                for c in cards
+            ]
+            return Response({"response": "Success", "count": len(data), "cards": data}, status=200)
+        except SQLAlchemyError as e:
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
+        except Exception as e:
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
         finally:
             session.close()
