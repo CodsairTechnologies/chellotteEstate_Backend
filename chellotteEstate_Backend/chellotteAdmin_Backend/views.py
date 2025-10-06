@@ -4072,29 +4072,44 @@ class DeleteTestimonial(APIView):
 
         finally:
             session.close()
-
+            
 class AddEditPlantation(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_classes = (TokenAuthentication,)
 
-    def compress_image(self, image_file):
-        """Compress uploaded image to reduce file size"""
+    def compress_image(self, image_file, quality=70):
+        """
+        Compress and convert uploaded image to WEBP, save to /media/home_plantation/,
+        and return its relative path.
+        """
         try:
-            image = Image.open(image_file)
+            img = Image.open(image_file)
             img_io = io.BytesIO()
-            image.save(img_io, format="WEBP", optimize=True, quality=70)
+
+            # Ensure RGB (no alpha)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+
+            img.save(img_io, format="WEBP", optimize=True, quality=quality)
             img_io.seek(0)
-            file_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.webp"
-            return f"/uploads/home_plantation/{file_name}"
+
+            # Unique file name
+            file_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{image_file.name.split('.')[0]}.webp"
+            relative_path = f"home_plantation/{file_name}"
+
+            # Save using Django’s default storage
+            default_storage.save(relative_path, ContentFile(img_io.getvalue()))
+
+            return relative_path
         except Exception as e:
-            return None
+            raise Exception(f"Image compression failed: {str(e)}")
 
     def post(self, request):
         session = dbsession.Session()
         try:
             data = request.data
 
-            highlight_id = data.get("id")  # for edit
+            highlight_id = data.get("id")  # For edit
             section_title = data.get("section_title", "Shade-Grown Coffee & Orthodox Tea from Wayanad")
             title = data.get("title")
             description = data.get("description")
@@ -4106,7 +4121,7 @@ class AddEditPlantation(APIView):
             image2 = request.FILES.get("image2")
             image3 = request.FILES.get("image3")
 
-            # ---------- Edit Logic ----------
+            # ---------- EDIT ----------
             if highlight_id:
                 highlight = session.query(HomePlantationSA).filter(
                     HomePlantationSA.id == highlight_id,
@@ -4114,21 +4129,13 @@ class AddEditPlantation(APIView):
                 ).first()
 
                 if not highlight:
-                    return Response(
-                        {"response": "Warning", "message": "Home Plantation not found"},
-                        status=200
-                    )
+                    return Response({"response": "Warning", "message": "Home Plantation not found"}, status=200)
 
-                if section_title:
-                    highlight.section_title = section_title
-                if title:
-                    highlight.title = title
-                if description:
-                    highlight.description = description
-                if order:
-                    highlight.order = order
-                if status:
-                    highlight.status = status
+                highlight.section_title = section_title or highlight.section_title
+                highlight.title = title or highlight.title
+                highlight.description = description or highlight.description
+                highlight.order = order or highlight.order
+                highlight.status = status or highlight.status
 
                 if image1:
                     highlight.image1 = self.compress_image(image1)
@@ -4140,12 +4147,9 @@ class AddEditPlantation(APIView):
                 session.commit()
                 session.refresh(highlight)
 
-                return Response(
-                    {"response": "Success", "message": "Home Plantation updated successfully"},
-                    status=200
-                )
+                return Response({"response": "Success", "message": "Home Plantation updated successfully"}, status=200)
 
-            # ---------- Add Logic ----------
+            # ---------- ADD ----------
             if not order:
                 max_order = session.query(func.max(HomePlantationSA.order)).scalar() or 0
                 order = max_order + 1
@@ -4167,24 +4171,15 @@ class AddEditPlantation(APIView):
             session.commit()
             session.refresh(new_highlight)
 
-            return Response(
-                {"response": "Success", "message": "Home plantation added successfully"},
-                status=200
-            )
+            return Response({"response": "Success", "message": "Home plantation added successfully"}, status=200)
 
         except SQLAlchemyError as e:
             session.rollback()
-            return Response(
-                {"response": "Error", "message": "Database error", "errors": str(e)},
-                status=500
-            )
+            return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
 
         except Exception as e:
             session.rollback()
-            return Response(
-                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
-                status=500
-            )
+            return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
 
         finally:
             session.close()
