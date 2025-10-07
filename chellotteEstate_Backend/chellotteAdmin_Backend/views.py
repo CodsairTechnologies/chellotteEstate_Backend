@@ -453,29 +453,6 @@ class AddEditBanner(APIView):
             createdId = data.get('createdId')
             image_file = request.FILES.get('bannerurl')
 
-            # image_url = None
-            # if image_file and image_file.name != 'undefined':
-            #     image = Image.open(image_file)
-            #     image_io = BytesIO()
-
-            #     if image.mode in ("RGBA", "P"):
-            #         image = image.convert("RGB")
-
-            #     image.save(image_io, format='WEBP', quality=75)
-            #     image_io.seek(0)
-
-            #     new_image_name = os.path.splitext(image_file.name)[0] + '.webp'
-            #     compressed_image = InMemoryUploadedFile(
-            #         image_io, None, new_image_name, 'image/webp', sys.getsizeof(image_io), None
-            #     )
-
-            #     # fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
-
-            #     fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
-
-            #     filename = fs.save(compressed_image.name, compressed_image)
-            #     image_url = fs.url(filename)
-
             image_url = None
             if image_file and image_file.name != 'undefined':
                 image = Image.open(image_file)
@@ -514,6 +491,14 @@ class AddEditBanner(APIView):
 
                 if not banner:
                     return Response({'response': 'Error', 'message': 'Banner not found or already deleted'}, status=404)
+                if title:
+                    duplicate = session.query(Banner).filter(
+                        func.lower(Banner.title) == title.lower(),
+                        Banner.bannerId != banner_id,
+                        Banner.status != 'Deleted'
+                    ).first()
+                    if duplicate:
+                        return Response({'response': 'Warning', 'message': 'A banner with this title already exists'}, status=200)
 
                 if title:
                     banner.title = title
@@ -530,6 +515,13 @@ class AddEditBanner(APIView):
             # --------- Add Logic ---------
             # if not image_url:
             #     return Response({'response': 'Error', 'message': 'Banner image is required for adding'}, status=400)
+            if title:
+                duplicate = session.query(Banner).filter(
+                    func.lower(Banner.title) == title.lower(),
+                    Banner.status != 'Deleted'
+                ).first()
+                if duplicate:
+                    return Response({'response': 'Warning', 'message': 'A banner with this title already exists'}, status=200)
 
             banner = Banner(
                 bannerId=self.generate_banner_id(session),
@@ -1784,8 +1776,8 @@ class AddEditGallery(APIView):
                 ).first()
                 if duplicate:
                     return Response(
-                        {"response": "Error", "message": "Title already exists"},
-                        status=400,
+                        {"response": "Warning", "message": "Title already exists"},
+                        status=200,
                     )
 
                 # Update fields
@@ -1814,8 +1806,8 @@ class AddEditGallery(APIView):
             ).first()
             if duplicate:
                 return Response(
-                    {"response": "Error", "message": "Title already exists"},
-                    status=400,
+                    {"response": "Warning", "message": "Title already exists"},
+                    status=200,
                 )
 
             # Handle image
@@ -2197,8 +2189,8 @@ class AddEditAboutPage(APIView):
 
                 if not about:
                     return Response(
-                        {"response": "Error", "message": "About page not found"},
-                        status=404,
+                        {"response": "Warning", "message": "About page not found"},
+                        status=200,
                     )
 
                 for key, value in sec_fields.items():
@@ -3870,6 +3862,15 @@ class AddEditTestimonial(APIView):
 
                 if not testimonial:
                     return Response({"response": "Error", "message": "Testimonial not found"}, status=404)
+                if name and testimony:
+                    duplicate = session.query(TestimonialSA).filter(
+                        TestimonialSA.name == name,
+                        TestimonialSA.testimony == testimony,
+                        TestimonialSA.id != testimonial_id,
+                        TestimonialSA.status != "Deleted"
+                    ).first()
+                    if duplicate:
+                        return Response({"response": "Warning", "message": "Duplicate testimonial exists"}, status=200)
 
                 if name:
                     testimonial.name = name
@@ -3889,7 +3890,7 @@ class AddEditTestimonial(APIView):
             ).first()
 
             if duplicate:
-                return Response({"response": "Error", "message": "Duplicate testimonial exists"}, status=400)
+                return Response({"response": "Warning", "message": "Duplicate testimonial exists"}, status=200)
 
             # ---------- Add ----------
             profile_img_path = None
@@ -4146,6 +4147,14 @@ class AddEditPlantation(APIView):
 
                 if not highlight:
                     return Response({"response": "Warning", "message": "Home Plantation not found"}, status=200)
+                # Duplicate check (ignore current highlight)
+                duplicate = session.query(HomePlantationSA).filter(
+                    func.lower(HomePlantationSA.title) == title.lower(),
+                    HomePlantationSA.id != highlight_id,
+                    HomePlantationSA.status != "Deleted"
+                ).first()
+                if duplicate:
+                    return Response({"response": "Warning", "message": "A Home Plantation with this title already exists"}, status=200)
 
                 highlight.section_title = section_title or highlight.section_title
                 highlight.title = title or highlight.title
@@ -4166,6 +4175,14 @@ class AddEditPlantation(APIView):
                 return Response({"response": "Success", "message": "Home Plantation updated successfully"}, status=200)
 
             # ---------- ADD ----------
+            # Duplicate check
+            duplicate = session.query(HomePlantationSA).filter(
+                func.lower(HomePlantationSA.title) == title.lower(),
+                HomePlantationSA.status != "Deleted"
+            ).first()
+            if duplicate:
+                return Response({"response": "Warning", "message": "A Home Plantation with this title already exists"}, status=200)
+
             if not order:
                 max_order = session.query(func.max(HomePlantationSA.order)).scalar() or 0
                 order = max_order + 1
