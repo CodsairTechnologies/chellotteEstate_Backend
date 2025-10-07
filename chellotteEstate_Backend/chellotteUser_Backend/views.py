@@ -985,71 +985,6 @@ class Get_ProductPageBox(APIView):
             session.close()
 
 #ADD ENQUIRY
-class AddCustomerEnquiry(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        session = dbsession.Session()
-        try:
-            data = request.data
-
-            name = data.get('name')
-            email = data.get('email')
-            phoneNumber = data.get('phoneNumber')
-            message = data.get('message')
-
-            # #  Basic validation
-            # if not all([name, email, message,phoneNumber]):
-            #     return Response({
-            #         "response": "Error",
-            #         "message": "All fields (name, email, message,phone number) are required"
-            #     }, status=400)
-
-            #  Email format validation
-            # EMAIL_REGEX = r"[^@]+@[^@]+\.[^@]+"
-            # if not re.match(EMAIL_REGEX, email):
-            #     return Response({
-            #         "response": "Error",
-            #         "message": "Please enter a valid email address"
-            #     }, status=400)
-
-            # Save enquiry to database
-            enquiry = CustomerEnquiry(
-                name=name,
-                email=email,
-                message=message,
-                phoneNumber = phoneNumber,
-                status = "Active",
-                created_date=datetime.now()
-            )
-            session.add(enquiry)
-
-            session.commit()
-            return Response({
-                "response": "Success",
-                "message": "Enquiry submitted successfully"
-                # "message": "Enquiry submitted and notification sent successfully"
-            }, status=200)
-
-        except SQLAlchemyError as e:
-            session.rollback()
-            return Response({
-                "response": "Error",
-                "message": "Database error",
-                "details": str(e)
-            }, status=500)
-
-        except Exception as e:
-            session.rollback()
-            return Response({
-                'response': 'Error',
-                'message': 'Unexpected error occurred',
-                'Error': str(e)
-            }, status=500)
-
-        finally:
-            session.close()
-
 # class AddCustomerEnquiry(APIView):
 #     permission_classes = [AllowAny]
 
@@ -1062,59 +997,38 @@ class AddCustomerEnquiry(APIView):
 #             email = data.get('email')
 #             phoneNumber = data.get('phoneNumber')
 #             message = data.get('message')
-#             # --- Save enquiry to database ---
+
+#             # #  Basic validation
+#             # if not all([name, email, message,phoneNumber]):
+#             #     return Response({
+#             #         "response": "Error",
+#             #         "message": "All fields (name, email, message,phone number) are required"
+#             #     }, status=400)
+
+#             #  Email format validation
+#             # EMAIL_REGEX = r"[^@]+@[^@]+\.[^@]+"
+#             # if not re.match(EMAIL_REGEX, email):
+#             #     return Response({
+#             #         "response": "Error",
+#             #         "message": "Please enter a valid email address"
+#             #     }, status=400)
+
+#             # Save enquiry to database
 #             enquiry = CustomerEnquiry(
 #                 name=name,
 #                 email=email,
 #                 message=message,
-#                 phoneNumber=phoneNumber,
-#                 status="Active",
+#                 phoneNumber = phoneNumber,
+#                 status = "Active",
 #                 created_date=datetime.now()
 #             )
 #             session.add(enquiry)
+
 #             session.commit()
-
-#             # --- Fetch active admin emails ---
-#             admin_emails = [
-#                 admin.emailId for admin in session.query(SuperAdminDtl)
-#                 .filter(SuperAdminDtl.status == "Active", SuperAdminDtl.emailId.isnot(None))
-#                 .all()
-#             ]
-
-#             # --- Send email notification ---
-#             if admin_emails:
-#                 try:
-#                     subject = f"📩 New Customer Enquiry from {name}"
-#                     email_message = f"""
-# Hello Admin,
-
-# You have received a new customer enquiry.
-
-# 👤 Name: {name}
-# 📧 Email: {email}
-# 📞 Phone: {phoneNumber}
-# 💬 Message:
-# {message}
-
-# Submitted on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-# Regards,
-# Your Website
-# """
-#                     send_mail(
-#                         subject,
-#                         email_message,
-#                         settings.DEFAULT_FROM_EMAIL,
-#                         admin_emails,
-#                         fail_silently=False,
-#                     )
-#                 except Exception as e:
-#                     # Email failure should not stop the API
-#                     print("Email send failed:", e)
-
 #             return Response({
 #                 "response": "Success",
-#                 "message": "Enquiry submitted successfully and notification sent to admin"
+#                 "message": "Enquiry submitted successfully"
+#                 # "message": "Enquiry submitted and notification sent successfully"
 #             }, status=200)
 
 #         except SQLAlchemyError as e:
@@ -1135,6 +1049,109 @@ class AddCustomerEnquiry(APIView):
 
 #         finally:
 #             session.close()
+
+
+from django.template.loader import render_to_string
+class AddCustomerEnquiry(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            data = request.data
+            name = data.get('name')
+            email = data.get('email')
+            phoneNumber = data.get('phoneNumber')
+            message = data.get('message')
+
+            # ---------- Validation ----------
+            if not all([name, email, phoneNumber, message]):
+                return Response({
+                    "response": "Error",
+                    "message": "All fields (name, email, phone, message) are required"
+                }, status=400)
+
+            # ---------- Duplicate Check ----------
+            existing = session.query(CustomerEnquiry).filter(
+                CustomerEnquiry.name == name,
+                CustomerEnquiry.email == email,
+                CustomerEnquiry.phoneNumber == phoneNumber,
+                CustomerEnquiry.message == message,
+                CustomerEnquiry.status != "Deleted"
+            ).first()
+
+            if existing:
+                return Response({
+                    "response": "Warning",
+                    "message": "Duplicate enquiry already exists"
+                }, status=200)
+
+            # ---------- Save New Enquiry ----------
+            enquiry = CustomerEnquiry(
+                name=name,
+                email=email,
+                message=message,
+                phoneNumber=phoneNumber,
+                status="Active",
+                created_date=datetime.now()
+            )
+            session.add(enquiry)
+            session.commit()
+
+            # ---------- Fetch Admin Emails ----------
+            admin_emails = [
+                admin.emailId for admin in session.query(SuperAdminDtl)
+                .filter(SuperAdminDtl.status == "Active", SuperAdminDtl.emailId.isnot(None))
+                .all()
+            ]
+
+            # ---------- Send Email Notification ----------
+            if admin_emails:
+                try:
+                    ctx = {
+                        'name': name,
+                        'email': email,
+                        'phone': phoneNumber,
+                        'message': message,
+                        'submitted_on': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    }
+
+                    subject = f"📩 New Customer Enquiry from {name}"
+                    from_email = settings.DEFAULT_FROM_EMAIL
+                    to_emails = admin_emails
+
+                    text_content = render_to_string('email/enquiry.txt', ctx)
+                    html_content = render_to_string('email/enquiry.html', ctx)
+
+                    msg = EmailMultiAlternatives(subject, text_content, from_email, to_emails)
+                    msg.attach_alternative(html_content, "text/html")
+                    msg.send()
+                except Exception as e:
+                    print(" Email sending failed:", e)
+
+            return Response({
+                "response": "Success",
+                "message": "Enquiry submitted successfully and notification sent to admin"
+            }, status=200)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "Error",
+                "message": "Database error",
+                "details": str(e)
+            }, status=500)
+
+        except Exception as e:
+            session.rollback()
+            return Response({
+                'response': 'Error',
+                'message': 'Unexpected error occurred',
+                'Error': str(e)
+            }, status=500)
+
+        finally:
+            session.close()
 
 class GetHomePlantations(APIView):
     permission_classes = [AllowAny]

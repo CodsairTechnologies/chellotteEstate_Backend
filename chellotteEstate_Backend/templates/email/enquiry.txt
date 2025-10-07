@@ -1,0 +1,14 @@
+Hello Admin,
+
+You have received a new customer enquiry.
+
+👤 Name: {{ name }}
+📧 Email: {{ email }}
+📞 Phone: {{ phone }}
+💬 Message:
+{{ message }}
+
+Submitted on: {{ submitted_on }}
+
+Regards,
+Your Website
