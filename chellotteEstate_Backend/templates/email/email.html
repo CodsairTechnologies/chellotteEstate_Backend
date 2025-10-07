@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your OTP Code</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #fffced;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    .email-container {
+      max-width: 600px;
+      width: 100%;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    .header {
+      background-color: #2d6836;
+      padding: 20px;
+      text-align: center;
+      color: white;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 30px;
+      text-align: center;
+    }
+    .content h2 {
+      font-size: 22px;
+      color: #333;
+    }
+    .content p {
+      font-size: 16px;
+      color: #555;
+      margin: 20px 0;
+    }
+    .otp-box {
+      font-size: 24px;
+      font-weight: bold;
+      color: #ffffff;
+      background-color: #2d6836;
+      padding: 15px 30px;
+      display: inline-block;
+      border-radius: 8px;
+      letter-spacing: 3px;
+    }
+    .footer {
+      background-color: #fafafa;
+      padding: 20px;
+      font-size: 14px;
+      color: #999;
+      text-align: center;
+    }
+    .footer span {
+      color: #333;
+      font-weight: 500;
+    }
+
+    /* Mobile Responsiveness */
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        margin: 20px;
+        border-radius: 8px;
+      }
+      .content {
+        padding: 20px;
+      }
+      .header h1 {
+        font-size: 20px;
+      }
+      .content h2 {
+        font-size: 18px;
+      }
+      .content p {
+        font-size: 14px;
+      }
+      .otp-box {
+        font-size: 20px;
+        padding: 12px 24px;
+      }
+      .footer {
+        font-size: 13px;
+        padding: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="email-container">
+    <div class="header">
+      <h1>Welcome to Chellotte Estate 🍹</h1>
+    </div>
+    <div class="content">
+      <h2>Hi <span style="color: #2d6836;">{{name}}</span>,</h2>
+      <p>We're excited to have you with us! Use the OTP below to verify your account and get started.</p>
+      <div class="otp-box">{{OTP}}</div>
+      <p>This OTP is valid for <strong>5 minutes</strong>. Please do not share it with anyone for your security.</p>
+    </div>
+    <div class="footer">
+      <p>With love, <br><span>Team Chellotte</span><br>Call: +91 xxxx xxx xxx</p>
+    </div>
+  </div>
+
+</body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your OTP Code</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #fffdf6;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    .email-container {
+      max-width: 600px;
+      width: 100%;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+    .header {
+      background-color: #d4af37; /* Gold */
+      padding: 20px;
+      text-align: center;
+      color: white;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .content {
+      padding: 30px;
+      text-align: center;
+    }
+    .content h2 {
+      font-size: 22px;
+      color: #333;
+    }
+    .content p {
+      font-size: 16px;
+      color: #555;
+      margin: 20px 0;
+    }
+    .otp-box {
+      font-size: 26px;
+      font-weight: bold;
+      color: #ffffff;
+      background-color: #d4af37;
+      padding: 15px 35px;
+      display: inline-block;
+      border-radius: 10px;
+      letter-spacing: 4px;
+    }
+    .footer {
+      background-color: #f9f9f9;
+      padding: 20px;
+      font-size: 14px;
+      color: #999;
+      text-align: center;
+    }
+    .footer span {
+      color: #d4af37;
+      font-weight: 600;
+    }
+
+    /* Mobile Responsiveness */
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        margin: 20px;
+        border-radius: 8px;
+      }
+      .content {
+        padding: 20px;
+      }
+      .header h1 {
+        font-size: 22px;
+      }
+      .content h2 {
+        font-size: 18px;
+      }
+      .content p {
+        font-size: 14px;
+      }
+      .otp-box {
+        font-size: 22px;
+        padding: 12px 28px;
+      }
+      .footer {
+        font-size: 13px;
+        padding: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="email-container">
+    <div class="header">
+      <h1>Welcome to JIARA GRACIO ✨</h1>
+    </div>
+    <div class="content">
+      <h2>Hello <span style="color: #d4af37;">{{name}}</span>,</h2>
+      <p>We're delighted to welcome you to the world of luxury. Use the OTP below to verify your account and begin your journey with Jiara Gracio.</p>
+      <div class="otp-box">{{OTP}}</div>
+      <p>This OTP is valid for <strong>5 minutes</strong>. Please do not share it with anyone for your security.</p>
+    </div>
+    <div class="footer">
+      <p>With elegance, <br><span>Team JIARA GRACIO</span><br>Call: +91 xxxx xxx xxx</p>
+    </div>
+  </div>
+
+</body>
+</html> -->

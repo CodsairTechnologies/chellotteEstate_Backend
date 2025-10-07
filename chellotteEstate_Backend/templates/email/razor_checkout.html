@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Razorpay Payment</title>
+</head>
+<body>
+
+<h2>Complete your payment</h2>
+
+<button id="rzp-button">Pay Now</button>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  const orderId = "59a66cc3"; // from backend
+  const orderautoId = 4;    // from backend
+
+  const options = {
+    key: "rzp_test_KME8qTraA3VmZk",
+    amount: 100,
+    currency: "INR",
+    name: "Your Business Name",
+    description: "Transaction",
+    order_id: "order_QjPfncyH284RiM", // From backend Razorpay order creation API
+    handler: function (response) {
+      const razorpay_order_id = response.razorpay_order_id;
+      const razorpay_payment_id = response.razorpay_payment_id;
+      const razorpay_signature = response.razorpay_signature;
+
+      fetch("http://127.0.0.1:8000/api/user/razorverify/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", // if needed
+        },
+        body: JSON.stringify({
+          razorpay_order_id,
+          razorpay_payment_id,
+          razorpay_signature,
+          orderId,
+          orderautoId
+        }),
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.message === "Payment verified successfully") {
+          alert("✅ Payment verified successfully!");
+          // window.location.href = "/thank-you";
+        } else {
+          alert("❌ Payment verification failed: " + data.message);
+        }
+      });
+    },
+    prefill: {
+      name: "John Doe",
+      email: "john@example.com",
+      contact: "9999999999",
+    },
+    theme: {
+      color: "#3399cc",
+    },
+  };
+
+  const rzp = new Razorpay(options);
+  document.getElementById("rzp-button").onclick = function (e) {
+    rzp.open();
+    e.preventDefault();
+  };
+</script>
+
+</script>
+
+</body>
+</html>

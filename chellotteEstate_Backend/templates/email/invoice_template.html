@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice - Vegan Valley</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.1/css/all.min.css"
+    integrity="sha256-2XFplPlrFClt0bIdPgpz8H7ojnk10H69xRqd9+uTShA=" crossorigin="anonymous" />
+
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    .card {
+      background-color: #fff;
+      border-radius: 10px;
+      padding: 30px;
+      box-shadow: 0 20px 27px 0 rgba(0, 0, 0, 0.05);
+    }
+
+    .invoice-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .invoice-title h1 {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 10px 0;
+      color: #2d6836;
+    }
+
+    .text-muted p,
+    .text-muted h5 {
+      margin: 5px 0;
+    }
+
+    hr {
+      margin: 20px 0;
+      border: none;
+      border-top: 1px solid #ccc;
+    }
+
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      text-align: center;
+      min-width: 600px;
+    }
+
+    table thead th {
+      background-color: #2d6836;
+      color: #fff;
+      font-weight: 600;
+      padding: 10px;
+      border: 1px solid #ddd;
+    }
+
+    table tbody td {
+      padding: 10px;
+      border: 1px solid #ddd;
+    }
+
+    .total-row th,
+    .total-row td {
+      border: none;
+    }
+
+    .amount-words {
+      margin-top: 30px;
+      text-align: right;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .signatory {
+      margin-top: 80px;
+      text-align: right;
+      font-style: italic;
+    }
+
+    @media print {
+      body {
+        background-color: #fff;
+        padding: 0;
+      }
+
+      .card {
+        box-shadow: none;
+        margin: 0;
+        border: none;
+      }
+    }
+
+    @media only screen and (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+
+      .card {
+        padding: 20px;
+      }
+
+      .invoice-title {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .invoice-title h1 {
+        font-size: 24px;
+        text-align: left;
+      }
+
+      .text-muted h5,
+      .text-muted p {
+        font-size: 14px;
+      }
+
+      table {
+        font-size: 14px;
+      }
+
+      .amount-words {
+        font-size: 14px;
+      }
+
+      .signatory {
+        font-size: 13px;
+        margin-top: 40px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="invoice-title">
+        <div style="font-size: 16px; color: #555;"><b>Date:</b> {{ order.ordered_date }}</div>
+        <h1>INVOICE</h1>
+      </div>
+
+      <div class="text-muted">
+        <p><b>Legal Entity Name:</b> Vegan Valley</p>
+        <p><b>Restaurant Address:</b> Haji Road, Kuttichira Road, South Beach, Kozhikode</p>
+      </div>
+
+      <hr />
+
+      <div class="text-muted">
+        <h5><b>Customer Name:</b> {{ customer.fullName }}</h5>
+        <h5><b>Delivery Address:</b> {{ address.address }}, {{ address.streetname }}, {{ address.landmark }}</h5>
+        <h5><b>Contact No:</b> {{ address.contactNo }}</h5>
+        <h5><b>Pincode:</b> {{ address.pincode }}</h5>
+        <h5><b>Email:</b> {{ customer.email }}</h5>
+        <hr />
+        <h5><b>Order ID:</b> {{ order.id }}</h5>
+        <h5><b>Order No:</b> {{ order.orderNo }}</h5>
+      </div>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Particulars</th>
+              <th>Price</th>
+              <th>Quantity</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for product in ordered_products %}
+            <tr>
+              <td style="text-transform: capitalize;">{{ product.product_name }}</td>
+              <td>₹{{ product.price }}</td>
+              <td>{{ product.quantity }}</td>
+              <td>₹{{ product.amount }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="total-row">
+              <th colspan="3" style="text-align: right;">Grand Total:</th>
+              <td><strong>₹{{ total }}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="amount-words">
+        Amount (in words): {{ words }}
+      </div>
+
+      <div class="signatory">

@@ -116,7 +116,7 @@ def senduserOTP(params):
 
         plaintext = get_template('email/email.txt')
         htmly = get_template('email/email.html')
-        subject = 'Welcome to MANKIND TALKS'
+        subject = 'Welcome to CHELLOTTE ESTATE'
         from_email = 'anupamaminnu2002@gmail.com'
         to = params['emailId']
 
