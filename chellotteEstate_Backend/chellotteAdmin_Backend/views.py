@@ -453,26 +453,55 @@ class AddEditBanner(APIView):
             createdId = data.get('createdId')
             image_file = request.FILES.get('bannerurl')
 
+            # image_url = None
+            # if image_file and image_file.name != 'undefined':
+            #     image = Image.open(image_file)
+            #     image_io = BytesIO()
+
+            #     if image.mode in ("RGBA", "P"):
+            #         image = image.convert("RGB")
+
+            #     image.save(image_io, format='WEBP', quality=75)
+            #     image_io.seek(0)
+
+            #     new_image_name = os.path.splitext(image_file.name)[0] + '.webp'
+            #     compressed_image = InMemoryUploadedFile(
+            #         image_io, None, new_image_name, 'image/webp', sys.getsizeof(image_io), None
+            #     )
+
+            #     # fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
+
+            #     fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
+
+            #     filename = fs.save(compressed_image.name, compressed_image)
+            #     image_url = fs.url(filename)
+
             image_url = None
             if image_file and image_file.name != 'undefined':
                 image = Image.open(image_file)
                 image_io = BytesIO()
 
-                if image.mode in ("RGBA", "P"):
+                # Preserve transparency if present
+                if image.mode in ("RGBA", "LA", "P"):
+                    image = image.convert("RGBA")
+                else:
                     image = image.convert("RGB")
 
+                # Save as WEBP with compression
                 image.save(image_io, format='WEBP', quality=75)
                 image_io.seek(0)
 
                 new_image_name = os.path.splitext(image_file.name)[0] + '.webp'
                 compressed_image = InMemoryUploadedFile(
-                    image_io, None, new_image_name, 'image/webp', sys.getsizeof(image_io), None
+                    image_io,
+                    None,
+                    new_image_name,
+                    'image/webp',
+                    image_io.getbuffer().nbytes,
+                    None
                 )
 
-                # fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
-
-                fs = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
-
+                fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, "banners"), base_url=settings.MEDIA_URL + "banners/")
                 filename = fs.save(compressed_image.name, compressed_image)
                 image_url = fs.url(filename)
 
@@ -769,19 +798,47 @@ class AddEditEstate(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_classes = (TokenAuthentication,)
 
+    # def compress_image(self, image_file):
+    #     """
+    #     Compress the uploaded image into WEBP format
+    #     """
+    #     image = Image.open(image_file)
+    #     image_io = BytesIO()
+
+    #     # Convert RGBA/Palette → RGB for WEBP compatibility
+    #     if image.mode in ("RGBA", "P"):
+    #         image = image.convert("RGB")
+
+    #     # Save compressed version
+    #     image.save(image_io, format="WEBP", quality=75)  # adjust quality (50-80) if needed
+    #     image_io.seek(0)
+
+    #     # Rename file extension to .webp
+    #     new_image_name = os.path.splitext(image_file.name)[0] + ".webp"
+
+    #     return InMemoryUploadedFile(
+    #         image_io,
+    #         None,
+    #         new_image_name,
+    #         "image/webp",
+    #         sys.getsizeof(image_io),
+    #         None,
+    #     )
     def compress_image(self, image_file):
         """
-        Compress the uploaded image into WEBP format
+        Compress the uploaded image into WEBP format (preserving transparency)
         """
         image = Image.open(image_file)
         image_io = BytesIO()
 
-        # Convert RGBA/Palette → RGB for WEBP compatibility
-        if image.mode in ("RGBA", "P"):
+        # Keep alpha transparency if present
+        if image.mode in ("RGBA", "LA", "P"):
+            image = image.convert("RGBA")
+        else:
             image = image.convert("RGB")
 
         # Save compressed version
-        image.save(image_io, format="WEBP", quality=75)  # adjust quality (50-80) if needed
+        image.save(image_io, format="WEBP", quality=75)  # adjust quality (50–80) if needed
         image_io.seek(0)
 
         # Rename file extension to .webp
@@ -1642,21 +1699,29 @@ class AddEditGallery(APIView):
 
     # def compress_image(self, uploaded_file, quality=70):
     #     """
-    #     Compress uploaded image and return compressed file path
+    #     Compress uploaded image, convert to WEBP, and return a ContentFile
     #     """
     #     try:
     #         # Open image with Pillow
     #         img = Image.open(uploaded_file)
     #         img_io = BytesIO()
 
-    #         # Convert all images to JPEG for compression (unless PNG with transparency)
+    #         # Convert images with transparency or palette to RGB
     #         if img.mode in ("RGBA", "P"):
     #             img = img.convert("RGB")
 
-    #         img.save(img_io, format="JPEG", quality=quality, optimize=True)
-    #         return ContentFile(img_io.getvalue(), name=uploaded_file.name)
+    #         # Save as WEBP (lossy compression for smaller size)
+    #         img.save(img_io, format="WEBP", quality=quality, optimize=True)
+    #         img_io.seek(0)
+
+    #         # Create a new file name with .webp extension
+    #         base_name = uploaded_file.name.rsplit('.', 1)[0]
+    #         new_name = f"{base_name}.webp"
+
+    #         return ContentFile(img_io.getvalue(), name=new_name)
+
     #     except Exception as e:
-        #         raise Exception(f"Image compression failed: {str(e)}")
+    #         raise Exception(f"Image compression failed: {str(e)}")
     def compress_image(self, uploaded_file, quality=70):
         """
         Compress uploaded image, convert to WEBP, and return a ContentFile
@@ -1666,8 +1731,10 @@ class AddEditGallery(APIView):
             img = Image.open(uploaded_file)
             img_io = BytesIO()
 
-            # Convert images with transparency or palette to RGB
-            if img.mode in ("RGBA", "P"):
+            # Preserve transparency when possible
+            if img.mode in ("RGBA", "LA", "P"):
+                img = img.convert("RGBA")
+            else:
                 img = img.convert("RGB")
 
             # Save as WEBP (lossy compression for smaller size)
@@ -1682,7 +1749,7 @@ class AddEditGallery(APIView):
 
         except Exception as e:
             raise Exception(f"Image compression failed: {str(e)}")
-    
+
     def post(self, request):
         session = dbsession.Session()
         try:
@@ -2045,6 +2112,26 @@ class AddEditAboutPage(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_classes = (TokenAuthentication,)
 
+    # def compress_image_webp(self, uploaded_file, quality=70):
+    #     """
+    #     Compress uploaded image and convert to WebP format
+    #     Returns Django ContentFile
+    #     """
+    #     try:
+    #         img = Image.open(uploaded_file)
+
+    #         # Convert all images to RGB (WebP does not support transparency in all cases)
+    #         if img.mode in ("RGBA", "P"):
+    #             img = img.convert("RGB")
+
+    #         img_io = BytesIO()
+    #         img.save(img_io, format="WEBP", quality=quality, method=6)
+    #         filename = uploaded_file.name.rsplit(".", 1)[0] + ".webp"
+    #         return ContentFile(img_io.getvalue(), name=filename)
+
+    #     except Exception as e:
+    #         raise Exception(f"Image conversion to WebP failed: {str(e)}")
+
     def compress_image_webp(self, uploaded_file, quality=70):
         """
         Compress uploaded image and convert to WebP format
@@ -2053,12 +2140,17 @@ class AddEditAboutPage(APIView):
         try:
             img = Image.open(uploaded_file)
 
-            # Convert all images to RGB (WebP does not support transparency in all cases)
-            if img.mode in ("RGBA", "P"):
+            # Preserve transparency (alpha channel) if present
+            if img.mode in ("RGBA", "LA", "P"):
+                img = img.convert("RGBA")
+            else:
                 img = img.convert("RGB")
 
             img_io = BytesIO()
-            img.save(img_io, format="WEBP", quality=quality, method=6)
+            # method=6 gives better compression; WebP supports alpha automatically for RGBA
+            img.save(img_io, format="WEBP", quality=quality, method=6, optimize=True)
+            img_io.seek(0)
+
             filename = uploaded_file.name.rsplit(".", 1)[0] + ".webp"
             return ContentFile(img_io.getvalue(), name=filename)
 
@@ -3336,18 +3428,21 @@ def compress_image_to_webp(uploaded_image, folder="products", quality=80):
 
     try:
         img = Image.open(uploaded_image)
-        if img.mode in ("RGBA", "P"):
+
+        # Preserve transparency if available
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+        else:
             img = img.convert("RGB")
 
-        # Compress and convert to webp
+        # Compress and convert to WebP
         buffer = io.BytesIO()
-        img.save(buffer, format="WEBP", optimize=True, quality=quality)
+        img.save(buffer, format="WEBP", optimize=True, quality=quality, method=6)
         buffer.seek(0)
 
         # Create folder if missing
         folder_path = os.path.join(folder)
-        if not os.path.exists(os.path.join("media", folder_path)):
-            os.makedirs(os.path.join("media", folder_path), exist_ok=True)
+        os.makedirs(os.path.join("media", folder_path), exist_ok=True)
 
         # Generate file name
         base_name = os.path.splitext(uploaded_image.name)[0]
@@ -3358,117 +3453,11 @@ def compress_image_to_webp(uploaded_image, folder="products", quality=80):
         default_storage.save(file_path, buffer)
 
         return file_path  # e.g. "products/icons/myicon.webp"
+
     except Exception as e:
-        print("❌ Image compression error:", e)
+        print("Image compression error:", e)
         return None
 
-# class AddEditProduct(APIView):
-#     permission_classes = (IsAuthenticated,)
-#     authentication_classes = (TokenAuthentication,)
-
-#     def post(self, request):
-#         session = dbsession.Session()
-#         try:
-#             data = request.data
-#             product_id = data.get("id")
-
-#             productID = data.get("productID")
-#             title = data.get("title")
-#             description = data.get("description")
-#             price = data.get("price")
-#             availability = data.get("availability")
-#             brand_name = data.get("brand_name")
-#             is_featured = data.get("is_featured", False)
-#             createdId = data.get("createdId", "system")
-#             createddate = data.get("createddate", datetime.date.today().strftime("%Y-%m-%d"))
-
-#             # Compress to WebP format
-#             cover_image = compress_image_to_webp(request.FILES.get("cover_image")) if "cover_image" in request.FILES else None
-#             background_image = compress_image_to_webp(request.FILES.get("background_image")) if "background_image" in request.FILES else None
-#             card_icon = compress_image_to_webp(request.FILES.get("card_icon")) if "card_icon" in request.FILES else None
-
-#             # -------- EDIT --------
-#             if product_id:
-#                 product = session.query(ProductSA).filter(
-#                     ProductSA.id == product_id,
-#                     ProductSA.status != "Deleted"
-#                 ).first()
-
-#                 if not product:
-#                     return Response({"response": "Warning", "message": "Product not found"}, status=200)
-
-#                 # Duplicate title check (excluding current product)
-#                 if title:
-#                     duplicate = session.query(ProductSA).filter(
-#                         func.lower(ProductSA.title) == func.lower(title),
-#                         ProductSA.id != product_id,
-#                         ProductSA.status != "Deleted"
-#                     ).first()
-#                     if duplicate:
-#                         return Response({"response": "Warning", "message": "Duplicate product title not allowed"}, status=200)
-
-#                 # Update provided fields
-#                 if title: product.title = title
-#                 if description: product.description = description
-#                 if price: product.price = price
-#                 if availability: product.availability = availability
-#                 if brand_name: product.brand_name = brand_name
-#                 product.is_featured = bool(is_featured)
-
-#                 if cover_image: product.cover_image = cover_image.name
-#                 if background_image: product.background_image = background_image.name
-#                 if card_icon: product.card_icon = card_icon.name
-
-#                 product.createdId = createdId
-#                 product.createddate = createddate
-
-#                 session.commit()
-#                 session.refresh(product)
-
-#                 return Response({"response": "Success", "message": "Product updated successfully"}, status=200)
-
-#             # -------- ADD --------
-#             if title:
-#                 duplicate = session.query(ProductSA).filter(
-#                     func.lower(ProductSA.title) == func.lower(title),
-#                     ProductSA.status != "Deleted"
-#                 ).first()
-#                 if duplicate:
-#                     return Response({"response": "Warning", "message": "Duplicate product title not allowed"}, status=200)
-
-#             new_product = ProductSA(
-#                 productID=productID,
-#                 title=title,
-#                 description=description,
-#                 price=price,
-#                 availability=availability,
-#                 brand_name=brand_name,
-#                 is_featured=bool(is_featured),
-#                 cover_image=cover_image.name if cover_image else None,
-#                 background_image=background_image.name if background_image else None,
-#                 card_icon=card_icon.name if card_icon else None,
-#                 status="Active",
-#                 createdId=createdId,
-#                 createddate=createddate,
-#             )
-
-#             session.add(new_product)
-#             session.commit()
-#             session.refresh(new_product)
-
-#             return Response(
-#                 {"response": "Success", "message": "Product added successfully", "id": new_product.id},
-#                 status=200
-#             )
-
-#         except SQLAlchemyError as e:
-#             session.rollback()
-#             return Response({"response": "Error", "message": "Database error", "errors": str(e)}, status=500)
-#         except Exception as e:
-#             session.rollback()
-#             return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
-#         finally:
-#             session.close()
 class AddEditProduct(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_classes = (TokenAuthentication,)
@@ -3828,15 +3817,38 @@ class AddEditTestimonial(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_classes = (TokenAuthentication,)
 
+    # def compress_image(self, image_file, upload_path):
+    #     try:
+    #         img = Image.open(image_file)
+    #         img_io = io.BytesIO()
+    #         img.save(img_io, format="WEBP", quality=70)
+    #         file_name = f"{upload_path}/{image_file.name.split('.')[0]}.webp"
+    #         path = default_storage.save(file_name, img_io)
+    #         return "/" + path
+    #     except Exception:
+    #         return None
     def compress_image(self, image_file, upload_path):
         try:
             img = Image.open(image_file)
+
+            # Preserve transparency if available
+            if img.mode in ("RGBA", "LA", "P"):
+                img = img.convert("RGBA")
+            else:
+                img = img.convert("RGB")
+
             img_io = io.BytesIO()
-            img.save(img_io, format="WEBP", quality=70)
-            file_name = f"{upload_path}/{image_file.name.split('.')[0]}.webp"
-            path = default_storage.save(file_name, img_io)
+            img.save(img_io, format="WEBP", quality=70, method=6)
+            img_io.seek(0)
+
+            file_name = f"{upload_path}/{os.path.splitext(image_file.name)[0]}.webp"
+
+            # Save properly using default_storage
+            path = default_storage.save(file_name, ContentFile(img_io.getvalue()))
             return "/" + path
-        except Exception:
+
+        except Exception as e:
+            print("Image compression error:", e)
             return None
 
     def post(self, request):
@@ -4072,7 +4084,7 @@ class DeleteTestimonial(APIView):
 
         finally:
             session.close()
-            
+
 class AddEditPlantation(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_classes = (TokenAuthentication,)
@@ -4086,21 +4098,25 @@ class AddEditPlantation(APIView):
             img = Image.open(image_file)
             img_io = io.BytesIO()
 
-            # Ensure RGB (no alpha)
-            if img.mode in ("RGBA", "P"):
+            # Preserve transparency when available
+            if img.mode in ("RGBA", "LA", "P"):
+                img = img.convert("RGBA")
+            else:
                 img = img.convert("RGB")
 
-            img.save(img_io, format="WEBP", optimize=True, quality=quality)
+            #  Save as WebP (supports transparency)
+            img.save(img_io, format="WEBP", optimize=True, quality=quality, method=6)
             img_io.seek(0)
 
             # Unique file name
-            file_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{image_file.name.split('.')[0]}.webp"
+            file_name = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{os.path.splitext(image_file.name)[0]}.webp"
             relative_path = f"home_plantation/{file_name}"
 
             # Save using Django’s default storage
             default_storage.save(relative_path, ContentFile(img_io.getvalue()))
 
-            return relative_path
+            return relative_path.replace("\\", "/")
+
         except Exception as e:
             raise Exception(f"Image compression failed: {str(e)}")
 
@@ -4477,11 +4493,16 @@ class AddEditTourismCard(APIView):
             return None
         try:
             image = Image.open(image_file)
-            if image.mode in ("RGBA", "P"):
+
+            # Preserve transparency if present
+            if image.mode in ("RGBA", "LA", "P"):
+                image = image.convert("RGBA")
+            else:
                 image = image.convert("RGB")
 
             img_io = io.BytesIO()
-            image.save(img_io, format="WEBP", optimize=True, quality=70)
+            # Save with transparency if available
+            image.save(img_io, format="WEBP", optimize=True, quality=70, method=6)
             img_io.seek(0)
 
             # Generate file name and save path
@@ -4491,16 +4512,17 @@ class AddEditTourismCard(APIView):
             # Ensure directory exists
             os.makedirs(folder_path, exist_ok=True)
 
-            # Use FileSystemStorage to save
+            # Save using Django FileSystemStorage
             fs = FileSystemStorage(location=folder_path, base_url=settings.MEDIA_URL + "uploads/tourism/cards/")
-            saved_name = fs.save(file_name, img_io)
+            saved_name = fs.save(file_name, ContentFile(img_io.getvalue()))
             file_url = fs.url(saved_name)
 
             return file_url.replace("\\", "/")
 
         except Exception as e:
-            print("⚠️ Image compression failed:", e)
+            print("Image compression failed:", e)
             return None
+
 
     def post(self, request):
         session = dbsession.Session()
@@ -4788,3 +4810,116 @@ class GetEnquiry(APIView):
         finally:
            session.close()
         
+#SETTINGS
+class UpdateAdminUsernameAndEmail(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            admin_id = request.data.get("id")
+            if not admin_id:
+                return Response({
+                    "response": "error",
+                    "message": "Admin ID is required."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            admin = session.query(SuperAdminDtl).filter_by(id=admin_id).first()
+            if not admin:
+                return Response({
+                    "response": "error",
+                    "message": "Admin not found."
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            new_username = request.data.get("username", admin.username)
+            new_email = request.data.get("emailId", admin.emailId)
+
+            admin.username = new_username
+            admin.emailId = new_email
+            session.commit()
+
+            return Response({
+                "response": "success",
+                "message": "Admin username and email updated successfully.",
+                "data": {
+                    "id": admin.id,
+                    "username": admin.username,
+                    "emailId": admin.emailId
+                }
+            }, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({
+                "response": "error",
+                "message": "Database error occurred.",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        finally:
+           session.close()
+           
+           
+class ProfileChangePassword(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def post(self, request):
+        session = dbsession.Session()
+
+        try:
+            email = request.data.get('email')
+            old_password = request.data.get('old_password')
+            new_password = request.data.get('new_password')
+            confirm_password = request.data.get('confirm_password')
+
+            # Validate required fields
+            if not all([email, old_password, new_password, confirm_password]):
+                return Response({'response': 'Error', 'message': 'All fields are required'}, status=status.HTTP_200_OK)
+
+            # Fetch admin by email
+            admin = session.query(SuperAdminDtl).filter(SuperAdminDtl.emailId == email).one_or_none()
+
+            if not admin:
+                return Response({'response': 'Error', 'message': 'Admin not found'}, status=status.HTTP_200_OK)
+
+
+            # Check old password
+            if not check_password(old_password, admin.password):
+                return Response({'response': 'Error', 'message': 'Old password is incorrect'}, status=status.HTTP_200_OK)
+
+            # Check new/confirm password match
+            if new_password != confirm_password:
+                return Response({'response': 'Error', 'message': 'New password and confirm password do not match'}, status=status.HTTP_200_OK)
+
+            # Prevent same old and new password
+            if check_password(new_password, admin.password):
+                return Response({'response': 'Error', 'message': 'New password cannot be same as the old password'}, status=status.HTTP_200_OK)
+
+            # Update password
+            admin.password = make_password(new_password)
+            session.add(admin)
+
+            # Add password history
+            password_obj = PasswordChangeHistory()
+            password_obj.status = 'Active'
+            password_obj.changeddate = datetime.datetime.now()
+            password_obj.loginId = admin.loginId
+            password_obj.createddate = datetime.datetime.now()
+            password_obj.type = admin.type
+            session.add(password_obj)
+
+            session.commit()
+            return Response({'response': 'Success', 'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
+
+        except SQLAlchemyError as e:
+            session.rollback()
+            return Response({'response': 'Error', 'message': 'Database error. Please try again later.', 'error': str(e)}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            session.rollback()
+            return Response({'response': 'Error', 'message': 'Something went wrong. Please try again later.', 'error': str(e)}, status=status.HTTP_200_OK)
+
+        finally:
+            session.close()

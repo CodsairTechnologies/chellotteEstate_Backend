@@ -38,6 +38,7 @@ urlpatterns = [
     path('api/user/FilterProducts/', views.FilterProducts.as_view(), name='FilterProducts'),
     path('api/user/SearchProducts/', views.SearchProducts.as_view(), name='SearchProducts'),
     path('api/user/Get_ProductPageBox/', views.Get_ProductPageBox.as_view(), name='Get_ProductPageBox'),
+    path('api/user/SearchFilterProducts/', views.SearchFilterProducts.as_view(), name='SearchFilterProducts'),
 
 #ENQUIRY
     path('api/user/add_contactenquiry/', views.AddCustomerEnquiry.as_view(), name='addcontactenquiry'),

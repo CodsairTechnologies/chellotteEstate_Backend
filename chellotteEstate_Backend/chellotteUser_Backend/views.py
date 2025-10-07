@@ -822,7 +822,7 @@ class SearchProducts(APIView):
                     or_(
                         ProductSA.title.ilike(f"%{query_text}%"),
                         ProductSA.brand_name.ilike(f"%{query_text}%"),
-                        ProductSA.description.ilike(f"%{query_text}%"),
+                        # ProductSA.description.ilike(f"%{query_text}%"),
                     )
                 )
                 .order_by(ProductSA.id.desc())
@@ -861,6 +861,90 @@ class SearchProducts(APIView):
 
         except Exception as e:
             return Response({"response": "Error", "message": "Unexpected error", "errors": str(e)}, status=500)
+
+        finally:
+            session.close()
+
+#SEARCH AND FILTER TOGETHER
+class SearchFilterProducts(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        session = dbsession.Session()
+        try:
+            query_text = request.data.get("query")       # Search query
+            availability = request.data.get("availability")  # Filter by availability
+            price_order = request.data.get("price_order")    # "low_to_high" or "high_to_low"
+
+            query = session.query(ProductSA).filter(ProductSA.status == "Active")
+
+            # Apply search if query exists
+            if query_text:
+                query = query.filter(
+                    or_(
+                        ProductSA.title.ilike(f"%{query_text}%"),
+                        ProductSA.brand_name.ilike(f"%{query_text}%"),
+                        ProductSA.description.ilike(f"%{query_text}%"),
+                    )
+                )
+
+            # Apply availability filter if provided
+            if availability:
+                query = query.filter(ProductSA.availability == availability)
+
+            # Apply price ordering if provided
+            if price_order == "low_to_high":
+                query = query.order_by(ProductSA.price.asc())
+            elif price_order == "high_to_low":
+                query = query.order_by(ProductSA.price.desc())
+            else:
+                query = query.order_by(ProductSA.id.desc())  # default ordering
+
+            products = query.all()
+
+            if not products:
+                return Response(
+                    {
+                        "response": "Warning",
+                        "message": "No products found matching the criteria",
+                        "count": 0,
+                        "data": [],
+                    },
+                    status=200,
+                )
+
+            data = [
+                {
+                    "id": p.id,
+                    "title": p.title,
+                    "description": p.description,
+                    "price": p.price,
+                    "availability": p.availability,
+                    "brand_name": p.brand_name,
+                    "cover_image": p.cover_image,
+                    "background_image": p.background_image,
+                    "card_icon": p.card_icon,
+                    "is_featured": p.is_featured,
+                    "status": p.status,
+                    "createdId": p.createdId,
+                    "createddate": str(p.createddate),
+                }
+                for p in products
+            ]
+
+            return Response({"response": "Success", "count": len(data), "data": data}, status=200)
+
+        except SQLAlchemyError as e:
+            return Response(
+                {"response": "Error", "message": "Database error", "errors": str(e)},
+                status=500,
+            )
+
+        except Exception as e:
+            return Response(
+                {"response": "Error", "message": "Unexpected error", "errors": str(e)},
+                status=500,
+            )
 
         finally:
             session.close()

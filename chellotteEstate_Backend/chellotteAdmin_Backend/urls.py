@@ -12,8 +12,12 @@ urlpatterns = [
 # FORGET PASSWORD
     path('api/admin/forgotpassword/', views.AdminforgotPassword, name='forgotpassword'),
     path("api/admin/verifyotp/",views.AdminverifyOtp,name="verifyotp"), 
-    path("api/admin/changepassword/",views.AdminchangePassword,name="changepassword"), 
+    path("api/admin/changepassword/",views.AdminchangePassword,name="changepassword"),
 
+#SETTINGS 
+    path('api/admin/profilechangepassword/', views.ProfileChangePassword.as_view(), name='profiechangepassword'),   
+    path('api/admin/updateadmin/', views.UpdateAdminUsernameAndEmail.as_view(), name='updateadmin'),
+ 
 #BANNERS
     path('api/admin/add_editbanner/', views.AddEditBanner.as_view(), name='addbanner'),
     path("api/admin/getbanner/",views.GetBanner.as_view(),name="getbanner"), 
